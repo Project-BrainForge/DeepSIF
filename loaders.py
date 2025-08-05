@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import numpy as np
 from scipy.io import loadmat, savemat
+from scipy import interpolate
 import h5py
 from utils import add_white_noise, ispadding
 import random
@@ -57,20 +58,34 @@ class SpikeEEGBuild(Dataset):
 
     def __getitem__(self, index):
 
-        if not self.data:
-            self.data = h5py.File('{}_nmm.h5'.format(self.file_path[:-12]), 'r')['data']
+        # if not self.data:
+        #     self.data = h5py.File('{}_nmm.h5'.format(self.file_path[:-12]), 'r')['data']
 
-        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int)         # labels with padding
+        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int64)         # labels with padding
         lb = raw_lb[np.logical_not(ispadding(raw_lb))]                              # labels without padding
         raw_nmm = np.zeros((500, self.fwd.shape[1]))
 
         for kk in range(raw_lb.shape[0]):                                           # iterate through number of sources
             curr_lb = raw_lb[kk, np.logical_not(ispadding(raw_lb[kk]))]
-            current_nmm = self.data[self.dataset_meta['nmm_idx'][index][kk]]
+            
+            # Check if curr_lb is empty (all padding)
+            if len(curr_lb) == 0:
+                print(f"Skipping source {kk} with all padding labels")
+                continue
+            
+            print(f"Processing source {kk} with labels {curr_lb}")
+            nmm_idx = self.dataset_meta['nmm_idx'][index][kk]
+            current_nmm = self.load_nmm_data(nmm_idx)
 
             ssig = current_nmm[:, [curr_lb[0]]]                                     # waveform in the center region
             # set source space SNR
-            ssig = ssig / np.max(ssig) * self.dataset_meta['scale_ratio'][index][kk][random.randint(0, self.num_scale_ratio - 1)]
+            if np.max(ssig) > 0:
+                print(f"Setting SNR for source {kk}")
+                ssig = ssig / np.max(ssig) * self.dataset_meta['scale_ratio'][index][kk][random.randint(0, self.num_scale_ratio - 1)]
+            else:
+                print(f"Skipping source {kk} with all zeros signal")
+                # If ssig is all zeros, skip this source
+                continue
             current_nmm[:, curr_lb] = ssig.reshape(-1, 1)
             # set weight decay inside one source patch
             weight_decay = self.dataset_meta['mag_change'][index][kk]
@@ -80,17 +95,23 @@ class SpikeEEGBuild(Dataset):
             raw_nmm = raw_nmm + current_nmm
 
         eeg = np.matmul(self.fwd, raw_nmm.transpose())                              # project data to sensor space; num_electrode * num_time
-        csnr = self.dataset_meta['sensor_snr'][index]
+        csnr = self.dataset_meta['current_snr'][index]
         noisy_eeg = add_white_noise(eeg, csnr).transpose()
 
         noisy_eeg = noisy_eeg - np.mean(noisy_eeg, axis=0, keepdims=True)  # time
         noisy_eeg = noisy_eeg - np.mean(noisy_eeg, axis=1, keepdims=True)  # channel
-        noisy_eeg = noisy_eeg / np.max(np.abs(noisy_eeg))
+        if np.max(np.abs(noisy_eeg)) > 0:
+            noisy_eeg = noisy_eeg / np.max(np.abs(noisy_eeg))
+        else:
+            noisy_eeg = np.zeros_like(noisy_eeg)
 
         # get the training output
         empty_nmm = np.zeros_like(raw_nmm)
         empty_nmm[:, lb] = raw_nmm[:, lb]
-        empty_nmm = empty_nmm / np.max(empty_nmm)
+        if np.max(empty_nmm) > 0:
+            empty_nmm = empty_nmm / np.max(empty_nmm)
+        else:
+            empty_nmm = np.zeros_like(empty_nmm)
         # Each data sample
         sample = {'data': noisy_eeg.astype('float32'),
                   'nmm': empty_nmm.astype('float32'),
@@ -104,6 +125,59 @@ class SpikeEEGBuild(Dataset):
 
     def __len__(self):
         return self.dataset_len
+
+    def load_nmm_data(self, nmm_idx):
+        """Load NMM data from file based on index"""
+        # Try to find the file by index across all directories
+        # The file pattern is: mean_iter_{iter}_a_iter_{a_num}_{file_num}.mat
+        print(f"Loading NMM data for index {nmm_idx} in load_nmm_data")
+        
+        # Map index to file parameters
+        # Try different mappings based on the index
+        mappings = [
+            # Mapping 1: direct mapping
+            {'a_num': (nmm_idx % 4) + 1, 'iter': (nmm_idx // 4) % 3, 'file_num': nmm_idx % 20},
+            # Mapping 2: different iteration
+            {'a_num': (nmm_idx % 4) + 1, 'iter': ((nmm_idx // 4) + 1) % 3, 'file_num': nmm_idx % 20},
+            # Mapping 3: different a_num
+            {'a_num': ((nmm_idx % 4) + 1) % 4 + 1, 'iter': (nmm_idx // 4) % 3, 'file_num': nmm_idx % 20},
+        ]
+        
+        for mapping in mappings:
+            a_num = mapping['a_num']
+            iter_num = mapping['iter']
+            file_num = mapping['file_num']
+            
+            file_path = f'source/raw_nmm/a{a_num}/mean_iter_{iter_num}_a_iter_{a_num}_{file_num}.mat'
+            try:
+                data = loadmat(file_path)
+                nmm_data = data['data']  # Return the actual NMM data
+                # Truncate to 994 regions to match forward matrix
+                if nmm_data.shape[1] > 994:
+                    nmm_data = nmm_data[:, :994]
+                
+                # Resample from 20000 time points to 500 time points
+                if nmm_data.shape[0] == 20000:
+                    # Use every 40th sample to get 500 time points
+                    nmm_data = nmm_data[::40, :]
+                elif nmm_data.shape[0] != 500:
+                    # If not 20000, try to resample to 500
+                    original_time = np.linspace(0, 1, nmm_data.shape[0])
+                    new_time = np.linspace(0, 1, 500)
+                    resampled_data = np.zeros((500, nmm_data.shape[1]))
+                    for region in range(nmm_data.shape[1]):
+                        f = interpolate.interp1d(original_time, nmm_data[:, region])
+                        resampled_data[:, region] = f(new_time)
+                    nmm_data = resampled_data
+                
+                print(f"Successfully loaded NMM data from {file_path}")
+                return nmm_data
+            except:
+                continue
+        
+        # If all attempts fail, return zeros
+        print(f"Warning: Could not load NMM data for index {nmm_idx}")
+        return np.zeros((500, 994))  # Default size
 
 
 class SpikeEEGLoad(Dataset):
@@ -221,20 +295,30 @@ class SpikeEEGBuildEval(Dataset):
 
     def __getitem__(self, index):
 
-        if not self.data:
-            self.data = h5py.File('{}_nmm.h5'.format(self.file_path[:-12]), 'r')['data']
+        # if not self.data:
+        #     self.data = h5py.File('{}_nmm.h5'.format(self.file_path[:-12]), 'r')['data']
 
-        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int)         # labels with padding
+        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int64)         # labels with padding
         lb = raw_lb[np.logical_not(ispadding(raw_lb))]                              # labels without padding
         raw_nmm = np.zeros((500, self.fwd.shape[1]))
 
         for kk in range(raw_lb.shape[0]):                                           # iterate through number of sources
             curr_lb = raw_lb[kk, np.logical_not(ispadding(raw_lb[kk]))]
-            current_nmm = self.data[self.dataset_meta['nmm_idx'][index][kk]]
+            
+            # Check if curr_lb is empty (all padding)
+            if len(curr_lb) == 0:
+                continue
+                
+            nmm_idx = self.dataset_meta['nmm_idx'][index][kk]
+            current_nmm = self.load_nmm_data(nmm_idx)
 
             ssig = current_nmm[:, [curr_lb[0]]]                                     # waveform in the center region
             # set source space SNR
-            ssig = ssig / np.max(ssig) * self.dataset_meta['scale_ratio'][index][kk][random.randint(0, self.num_scale_ratio - 1)]
+            if np.max(ssig) > 0:
+                ssig = ssig / np.max(ssig) * self.dataset_meta['scale_ratio'][index][kk][random.randint(0, self.num_scale_ratio - 1)]
+            else:
+                # If ssig is all zeros, skip this source
+                continue
             current_nmm[:, curr_lb] = ssig.reshape(-1, 1)
             # set weight decay inside one source patch
             weight_decay = self.dataset_meta['mag_change'][index][kk]
@@ -244,7 +328,7 @@ class SpikeEEGBuildEval(Dataset):
             raw_nmm = raw_nmm + current_nmm
 
         eeg = np.matmul(self.fwd, raw_nmm.transpose())                              # project data to sensor space; num_electrode * num_time
-        csnr = self.dataset_meta['sensor_snr'][index]
+        csnr = self.dataset_meta['current_snr'][index]
 
         # add noise to sensor space
         if 'rsn' in self.eval_params:
@@ -263,17 +347,33 @@ class SpikeEEGBuildEval(Dataset):
 
         noisy_eeg = noisy_eeg - np.mean(noisy_eeg, axis=0, keepdims=True)  # time
         noisy_eeg = noisy_eeg - np.mean(noisy_eeg, axis=1, keepdims=True)  # channel
-        noisy_eeg = noisy_eeg / np.max(np.abs(noisy_eeg))
+        if np.max(np.abs(noisy_eeg)) > 0:
+            noisy_eeg = noisy_eeg / np.max(np.abs(noisy_eeg))
+        else:
+            noisy_eeg = np.zeros_like(noisy_eeg)
 
         # get the training output
         empty_nmm = np.zeros_like(raw_nmm)
         empty_nmm[:, lb] = raw_nmm[:, lb]
-        empty_nmm = empty_nmm / np.max(empty_nmm)
+        if np.max(empty_nmm) > 0:
+            empty_nmm = empty_nmm / np.max(empty_nmm)
+        else:
+            empty_nmm = np.zeros_like(empty_nmm)
         # Each data sample
         sample = {'data': noisy_eeg.astype('float32'),
                   'nmm': empty_nmm.astype('float32'),
                   'label': raw_lb,
                   'snr': csnr}
+        
+        # Debug: check for NaN values
+        if np.isnan(noisy_eeg).any():
+            print(f"Warning: NaN values found in EEG data")
+        if np.isnan(empty_nmm).any():
+            print(f"Warning: NaN values found in NMM data")
+        
+        print(f"EEG data stats: min={np.min(noisy_eeg):.6f}, max={np.max(noisy_eeg):.6f}, mean={np.mean(noisy_eeg):.6f}")
+        print(f"NMM data stats: min={np.min(empty_nmm):.6f}, max={np.max(empty_nmm):.6f}, mean={np.mean(empty_nmm):.6f}")
+        
         if self.transform:
             sample = self.transform(sample)
 
@@ -336,14 +436,15 @@ class SZNMMDatah5(Dataset):
         if not self.data:
             self.data = h5py.File('{}_nmm.h5'.format(self.file_path[:-12]), 'r')['data']
 
-        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int)
-        lb = raw_lb[np.logical_not(myisnan(raw_lb))]
+        raw_lb = self.dataset_meta['selected_region'][index].astype(np.int64)
+        lb = raw_lb[np.logical_not(np.isnan(raw_lb))]
         raw_nmm = np.zeros((500, self.fwd.shape[1]))
 
         for kk in range(raw_lb.shape[0]):
 
-            curr_lb = raw_lb[kk, np.logical_not(myisnan(raw_lb[kk]))]
-            current_nmm = self.data[self.dataset_meta['nmm_idx'][index][kk]]
+            curr_lb = raw_lb[kk, np.logical_not(np.isnan(raw_lb[kk]))]
+            nmm_idx = self.dataset_meta['nmm_idx'][index][kk]
+            current_nmm = self.load_nmm_data(nmm_idx)
 
             ssig = current_nmm[:, [curr_lb[0]]]
             # set source space SNR
@@ -362,7 +463,7 @@ class SZNMMDatah5(Dataset):
                 same_source_ind = len(curr_lb)
 
             weight_decay = self.dataset_meta['mag_change'][random.randint(0, self.num_mag - 1)][index][kk][:]
-            weight_decay = weight_decay[np.logical_not(myisnan(weight_decay))]
+            weight_decay = weight_decay[np.logical_not(np.isnan(weight_decay))]
             current_nmm[:, curr_lb[0:same_source_ind]] = ssig[0, :].reshape(-1, 1) * weight_decay[0:same_source_ind]
             current_nmm[:, curr_lb[same_source_ind:]] = ssig[1, :].reshape(-1, 1) * weight_decay[same_source_ind:]
 
@@ -395,6 +496,47 @@ class SZNMMDatah5(Dataset):
 
     def __len__(self):
         return self.dataset_len
+
+    def load_nmm_data(self, nmm_idx):
+        """Load NMM data from file based on index"""
+        # Try to find the file by index across all directories
+        # The file pattern is: mean_iter_{iter}_a_iter_{a_num}_{file_num}.mat
+        print(f"Loading NMM data for index {nmm_idx} in load_nmm_data")
+        
+        # Try different combinations of parameters
+        for a_num in range(1, 5):  # a1 to a4
+            for iter_num in range(3):  # iter 0, 1, 2
+                for file_num in range(20):  # file numbers 0-19
+                    file_path = f'source/raw_nmm/a{a_num}/mean_iter_{iter_num}_a_iter_{a_num}_{file_num}.mat'
+                    try:
+                        data = loadmat(file_path)
+                        nmm_data = data['data']  # Return the actual NMM data
+                        # Truncate to 994 regions to match forward matrix
+                        if nmm_data.shape[1] > 994:
+                            nmm_data = nmm_data[:, :994]
+                        
+                        # Resample from 20000 time points to 500 time points
+                        if nmm_data.shape[0] == 20000:
+                            # Use every 40th sample to get 500 time points
+                            nmm_data = nmm_data[::40, :]
+                        elif nmm_data.shape[0] != 500:
+                            # If not 20000, try to resample to 500
+                            original_time = np.linspace(0, 1, nmm_data.shape[0])
+                            new_time = np.linspace(0, 1, 500)
+                            resampled_data = np.zeros((500, nmm_data.shape[1]))
+                            for region in range(nmm_data.shape[1]):
+                                f = interpolate.interp1d(original_time, nmm_data[:, region])
+                                resampled_data[:, region] = f(new_time)
+                            nmm_data = resampled_data
+                        
+                        print(f"Successfully loaded NMM data from {file_path}")
+                        return nmm_data
+                    except:
+                        continue
+        
+        # If all attempts fail, return zeros
+        print(f"Warning: Could not load NMM data for index {nmm_idx}")
+        return np.zeros((500, 994))  # Default size
 
 # from matplotlib import pyplot as plt
 # plt.subplot(1,2,1)

@@ -11,11 +11,13 @@ def main(region_id):
     """ TVB Simulation to generate raw source space dynamics, unit in mV, and ms
     :param region_id: int; source region id, with parameters generating interictal spike activity
     """
-    if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
-        os.mkdir('../source/raw_nmm/a{}/'.format(region_id))
+    # if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
+    #     os.mkdir('../source/raw_nmm/a{}/'.format(region_id))
+    
+    os.makedirs('/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmmm/a{}/'.format(region_id), exist_ok=True)
     start_time = time.time()
     print('------ Generate data of region_id {} ----------'.format(region_id))
-    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_76.zip') # connectivity provided by TVB
+    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_998.zip') # connectivity provided by TVB
     conn.configure()
 
     # define A value
@@ -51,6 +53,7 @@ def main(region_id):
 
             # run 200s of simulation, cut it into 20 pieces, 10s each. (Avoid saving large files)
             for iii in range(20):
+                print('Running simulation for region_id {} and iteration {}'.format(region_id, iii))
                 siml = 1e4
                 out = sim.run(simulation_length=siml)
                 (t, data), = out
@@ -63,12 +66,12 @@ def main(region_id):
                 # data[:, 949] = data[:, 995]
                 # data = data[:, :994]
 
-                savemat('../source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat'.format(region_id, iter_m, region_id, iii),
+                savemat('/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat'.format(region_id, iter_m, region_id, iii),
                         {'time': t, 'data': data, 'A': use_A})
     print('Time for', region_id, time.time() - start_time)
 
 
-if __name__ == '__main__':
+if __name__ == '__ main__':
 
     parser = argparse.ArgumentParser(description='TVB Simulation')
     parser.add_argument('--a_start', type=int, default=0, metavar='t/f', help='start region id')

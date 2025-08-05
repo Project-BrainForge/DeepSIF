@@ -59,11 +59,18 @@ def main():
             logger.info('{} is {}'.format(v, args.__dict__[v]))
 
     # ================================== LOAD DATA ===================================================================================================
+    print("Loading training data...")
     train_data = loaders.__dict__[args.dat](data_root + args.train, fwd=fwd,
                                                 args_params={'dataset_len': 4})
+    print(f"Training data loaded. Dataset size: {len(train_data)}")
     train_loader = DataLoader(train_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=True)
+    print(f"Training loader created with {len(train_loader)} batches")
+
+    print("Loading test data...")
     test_data = loaders.__dict__[args.dat](data_root + args.test, fwd=fwd, args_params={'dataset_len': 4})
+    print(f"Test data loaded. Dataset size: {len(test_data)}")
     test_loader = DataLoader(test_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=False)
+    print(f"Test loader created with {len(test_loader)} batches")
 
     # ================================== CREATE MODEL ================================================================================================
 
@@ -87,7 +94,7 @@ def main():
         fn = os.path.join(result_root, 'epoch_' + args.resume)
         if os.path.isfile(fn):
             print("=> Found checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(fn, map_location=torch.device('cpu'))
+            checkpoint = torch.load(fn, map_location=torch.device('cpu') ,weights_only=False)
             args.start_epoch = checkpoint['epoch']
             best_result = checkpoint['best_result']
             # recreate net and optimizer based on the saved model
@@ -108,12 +115,16 @@ def main():
     print('Prepare time:', time.time() - start_time)
 
     # =============================== TRAINING =======================================================================================================
+    print(f"Starting training loop. Start epoch: {args.start_epoch + 1}, End epoch: {args.epoch}")
     for epoch in range(args.start_epoch + 1, args.epoch):
 
+        print(f"Starting epoch {epoch}")
         # train for one epoch
         train_lss_all = train(train_loader, net, criterion, optimizer, {'device': device, 'logger': logger})
+        print(f"Training completed for epoch {epoch}")
         # evaluate on validation set
         test_lss_all = validate(test_loader, net, criterion, {'device': device})
+        print(f"Validation completed for epoch {epoch}")
         # lr_scheduler.step(test_le)
         train_loss.extend([np.sum(np.array(train_lss_all)) / len(train_data)])
         test_loss.extend([np.sum(np.array(test_lss_all))/len(test_data)])
@@ -150,24 +161,60 @@ def train(train_loader, model, criterion, optimizer, args_params):
     model.train()
     train_loss = []
     start_time = time.time()
+    print(f"Starting training with {len(train_loader)} batches")
     for batch_idx, sample_batch in enumerate(train_loader):
+        print(f"Processing batch {batch_idx + 1}/{len(train_loader)}")
         # load data
         data = sample_batch['data'].to(device)
         nmm = sample_batch['nmm'].to(device)
+        print(f"Data shape: {data.shape}, NMM shape: {nmm.shape}")
+        
+        # Debug: check input data
+        print(f"Input data stats: min={data.min().item():.6f}, max={data.max().item():.6f}, mean={data.mean().item():.6f}")
+        print(f"Target NMM stats: min={nmm.min().item():.6f}, max={nmm.max().item():.6f}, mean={nmm.mean().item():.6f}")
+        
+        if torch.isnan(data).any():
+            print("Warning: NaN values in input data")
+        if torch.isnan(nmm).any():
+            print("Warning: NaN values in target NMM")
 
         # training process
         optimizer.zero_grad()
         model_output = model(data)
         out = model_output['last']
+        
+        # Debug: check model output
+        print(f"Model output stats: min={out.min().item():.6f}, max={out.max().item():.6f}, mean={out.mean().item():.6f}")
+        if torch.isnan(out).any():
+            print("Warning: NaN values in model output")
+        
         loss = criterion(out, nmm)
+        print(f"Loss value: {loss.item()}")
+        
+        if torch.isnan(loss):
+            print("Warning: Loss is NaN!")
+            continue
+            
         loss.backward()
+        
+        # Debug: check gradients
+        total_norm = 0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** (1. / 2)
+        print(f"Gradient norm: {total_norm}")
+        
         optimizer.step()
 
         train_loss.append(loss.data.view(1))
+        print(f"Batch {batch_idx + 1} loss: {loss.item()}")
         if (batch_idx + 1) % 500 == 0:
             print_s = "batch_idx_{}_time_{}_train_loss_{}".format(batch_idx, time.time() - start_time, train_loss[-1])
             logger.info(print_s)
     train_loss = torch.cat(train_loss).cpu().numpy()
+    print(f"Training completed. Total loss: {np.sum(train_loss)}")
     return train_loss
 # END TRAIN
 

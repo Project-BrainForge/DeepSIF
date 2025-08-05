@@ -7,9 +7,9 @@ addParameter(p,'filename','spikes',@ischar);
 addParameter(p,'leadfield_name','leadfield_75_20k.mat', @ischar);
 parse(p, varargin{:})
 filename = p.Results.filename;
-headmodel = load(['../anatomy/' p.Results.leadfield_name]);
+headmodel = load(['/Users/pasindusankalpa/Documents/DeepSIF/anatomy/' p.Results.leadfield_name]);
 fwd = headmodel.fwd;
-savefile_path = '../source/';
+savefile_path = '/Users/pasindusankalpa/Documents/DeepSIF/source/';
 
 % -------------------------------------------------------------------------
 iter_list = 0:2;   % the iter during NMM generation.
@@ -40,16 +40,18 @@ for i_iter = 1:length(iter_list)
             mkdir([savefile_path 'nmm_' filename '/a' int2str(i-1)])
         end
 
-        fn = [savefile_path 'raw_nmm/a' int2str(i-1) '/mean_iter_' int2str(iter) '_a_iter_' int2str(i-1)];
+        fn = ['/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a0/mean_iter_' int2str(iter) '_a_iter_' int2str(i-1)];
         if isfile([fn '_ds.mat'])                                          % saved downsampled data before
            raw_data = load([fn '_ds.mat']);
            nmm = raw_data.all_data;
         else
            sub_iter_nmm_files = dir([fn '_*.mat']);
+           disp(sub_iter_nmm_files)
            all_data = [];
            all_time = [];
            for sub_iter_i = 1:length(sub_iter_nmm_files)
-               d = load([sub_iter_nmm_files(sub_iter_i).folder '\' sub_iter_nmm_files(sub_iter_i).name]);
+               disp(sub_iter_nmm_files(sub_iter_i))
+               d = load([sub_iter_nmm_files(sub_iter_i).folder '/' sub_iter_nmm_files(sub_iter_i).name]);
                all_data = [all_data; d.data];
                all_time = [all_time;d.time'];
            end
@@ -63,10 +65,16 @@ for i_iter = 1:length(iter_list)
            nmm = all_data;
         end
 
-        [spike_time, spike_chan] = find_spike_time(nmm);                   % Process raw tvb output to find the spike peak time
+        [spike_time, spike_chan] = find_spike_time(nmm);    
+        
+        % Process raw tvb output to find the spike peak time
+        disp("wijefiujewi")
+        disp(spike_chan)
+        disp(spike_time)
         
         % ----------- select the spikes we want to extract ---------------%
-        rule1 =  (spike_chan == i);                                        % there is spike in the source region
+        rule1 =  (spike_chan == i);   % there is spike in the source region
+   
         start_time = floor(spike_time(rule1)/500) * 500 + 1;               % there is no source in other region in the clip
         clear_ind = repmat(start_time, [900, 1]) + (-200:699)';            % 900 * num_spike
         rule2 = (sum(ismember(clear_ind, spike_time(~rule1)), 1) == 0);    % there are no other spikes in the clip
@@ -75,13 +83,17 @@ for i_iter = 1:length(iter_list)
                
         % ----------- Optional :  Scale the NMM here----------------------%
         alpha_value = find_alpha(nmm, fwd, i, spike_time, 15);
-        nmm = rescale_nmm_channel(nmm, i, spike_time, alpha_value);       
+        nmm = rescale_nmm_channel(nmm, i, spike_time, alpha_value);  
+        disp(nmm(1:10, :));
         % ------------Save Spike NMM Data --------------------------------%
         start_time = floor(spike_time/500) * 500 + 1;
         spike_ind = repmat(start_time, [500, 1]) + (0:499)';       
 %         start_time = floor((spike_time+200)/500) * 500 + 1 - 200;        % start time can be changed
 %         start_time = max(start_time, 101);
 %         spike_ind = repmat(start_time, [500, 1]) + (0:499)';
+
+        disp('Selected Spike Times:');
+        disp(spike_time(rule1));
 
         nmm_data = reshape(nmm(spike_ind,:), 500, [], size(nmm,2));        % size: time * num_spike * channel
         save_spikes_(nmm_data, [savefile_path 'nmm_' filename '/a' int2str(i-1) '/nmm_'], previous_iter_spike_num(i));
@@ -105,39 +117,67 @@ end
 
 
 function save_spikes_(spike_data, savefile_path, previous_iter_spike_num)
-% Save the spike data into seperate files
+% Save the spike data into separate files
 % INPUTS: spike_data: time * num_spikes * channel; extracted spike data
 %         savefile_path: string
-    for iii = 1:size(spike_data,2)
-        % The raw data
-        data = squeeze(spike_data(:,iii,:));
-        save([savefile_path int2str(iii+previous_iter_spike_num) '.mat'], 'data', '-v7')
+
+    disp("Uploaded 111")
+    disp('Size of spike_data:');
+    disp(size(spike_data));  % Print the size of spike_data
+
+    if size(spike_data, 2) == 0
+        disp('No spikes to save!');
+        return;  % Exit if no spikes are present
+    end
+
+    for iii = 1:size(spike_data, 2)
+        disp(['Processing spike ', num2str(iii)]);
+        data = squeeze(spike_data(:, iii, :));  % Extract data for the current spike
+        disp('Data for current spike:');
+        disp(data);  % Print data for the current spike
+        save([savefile_path int2str(iii + previous_iter_spike_num) '.mat'], 'data', '-v7');
+        disp("Uploaded");
     end
 end
 
 
-function [spike_time, spike_chan] = find_spike_time(nmm)
-% Process raw tvb output to find the spike peak time.
-%
-% INPUTS:
-%     - nmm        : (Downsampled) raw tvb output, time * channel
-% OUTPUTS:
-%     - spike_time : the spike peak time in the (downsampled) NMM data
-%     - spike_chan : the spike channel for each spike
 
+function [spike_time, spike_chan] = find_spike_time(nmm)
     spikes_nmm = nmm;
-    spikes_nmm(nmm < 8) = 0;                                               % find the spiking activity stronger than the background
-    local_max = islocalmax(spikes_nmm);                                    % find the peak
+    disp('Before thresholding:');
+    % disp(spikes_nmm(1:10, :));  % Check the first 10 rows before thresholding
+
+    spikes_nmm(nmm < 8) = 0;  % Find the spiking activity stronger than the background
+    disp('After thresholding:');
+    % disp(spikes_nmm(1:10, :));  % Check the first 10 rows after thresholding
+
+    local_max = islocalmax(spikes_nmm);  % Find the peak
     [spike_time, spike_chan] = find(local_max);
+    % disp(['Number of spikes detected: ', num2str(length(spike_time))]);
+    
+
+
+
+    % Sorting and filtering spike times
     [spike_time, sort_ind] = sort(spike_time);
-    spike_chan = spike_chan(sort_ind);                                     % sort the activity based on time
-    use_ind = (spike_time-249 > 0) & ...                                   % ignore the spikes at the beginning or end of the signal
-        (spike_time+250 < size(nmm, 1) & ...
-        [1 diff(spike_time)'>100]');                                       % ignore peaks close together for now (will have signals with close peaks in multi-source condition)
+
+  
+    spike_chan = spike_chan(sort_ind);
+
+    
+    
+    use_ind = (spike_time-249 > 0) & ...
+              (spike_time+250 < size(nmm, 1) & ...
+              [1 diff(spike_time)'>100]');  % Ignore peaks close together
+  
+
+
+
     spike_time = spike_time(use_ind)';
     spike_chan = spike_chan(use_ind)';
 
 end
+
 
 
 
@@ -160,7 +200,7 @@ function [alpha] = find_alpha(nmm, fwd, region_id, time_spike, target_SNR)
 %     spike_ind = max(0, time_spike-100): max(time_spike+100,size(nmm,1));   % make sure the index is not out of range                     
     spike_shape = nmm(:,region_id(1)); %/max(nmm(:,region_id(1)));
     nmm(:, region_id) = repmat(spike_shape,1,length(region_id));
-    % calculate the scaling factor
+    % calculate the scaling factor 
     [Ps, Pn, ~] = calcualate_SNR(nmm, fwd, region_id, spike_ind);
     alpha = sqrt(10^(target_SNR/10)*Pn/Ps);
 end
