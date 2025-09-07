@@ -38,7 +38,33 @@ for i= 1:length(all_out)
     num_region_per_source = sum(~myisnan(all_label),1);
     all_label(myisnan(all_label)) = [];
     % recon regions
-    current_regions = all_regions{i};
+    % Handle different formats that might be saved by Python
+    try
+        % Try to access as a cell array first
+        current_regions = all_regions{i};
+    catch
+        % If not a cell array, try accessing as a struct with numeric field names
+        try
+            % Convert i to string and use as field name
+            field_name = ['x', num2str(i-1)]; % Python is 0-indexed, MATLAB is 1-indexed
+            current_regions = all_regions.(field_name);
+        catch
+            % If that fails too, try direct indexing if it's a regular array
+            try
+                current_regions = all_regions(i,:);
+            catch
+                % Last resort: try to get the i-th row if it's stored differently
+                try
+                    current_regions = all_regions(:,i);
+                catch
+                    % Give up and skip this iteration
+                    warning(['Could not access all_regions for index ' num2str(i)]);
+                    continue;
+                end
+            end
+        end
+    end
+    
     if isempty(current_regions)
         continue
     end
@@ -58,7 +84,22 @@ for i= 1:length(all_out)
         lb(myisnan(lb)) = [];
         if ~isempty(recon)
             recon_regions{i,k} = recon; 
-            recon_activity{i,k} = all_out{i}(source_id==k,:);
+            % Handle different formats for all_out similarly
+            try
+                recon_activity{i,k} = all_out{i}(source_id==k,:);
+            catch
+                try
+                    field_name = ['x', num2str(i-1)];
+                    recon_activity{i,k} = all_out.(field_name)(source_id==k,:);
+                catch
+                    try
+                        recon_activity{i,k} = all_out(i, source_id==k,:);
+                    catch
+                        warning(['Could not access all_out for index ' num2str(i)]);
+                        recon_activity{i,k} = [];
+                    end
+                end
+            end
             
             interc = intersect(recon,lb);
             precision(i,k) = length(interc)/length(recon);

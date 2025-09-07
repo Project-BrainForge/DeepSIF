@@ -1,0 +1,30 @@
+% Load the model output
+   load('source/VEP/rnn_test_2_.path.tar.mat');
+   % This loads the 'all_out' variable into your workspace
+
+   % Load the cortex data
+   load('anatomy/fs_cortex_20k.mat');
+   % This should provide 'pos' and 'tri' variables needed for visualization
+
+   % Add the misc_scripts directory to path (if needed)
+   addpath('misc_scripts');
+   
+   % Process results if needed (depends on your specific analysis)
+   processed_data = squeeze(mean(abs(all_out), 2));
+  
+
+   % Check dimensions
+   size(all_out)  % Model output size
+   size(pos, 1)   % Number of vertices in cortex
+
+   % Load region mapping
+   load('anatomy/fs_cortex_20k_region_mapping.mat');  % Should provide 'rm' variable
+   
+   % Process the output based on region mapping
+   processed_data = zeros(size(pos, 1), 1);
+   for i = 1:max(rm)+1
+       processed_data(rm == (i-1)) = all_out(i);  % Map region values to vertices
+   end
+   
+   % Visualize with corrected data
+   visualize_result(pos, tri, processed_data, 'FaceAlpha',0.5);
