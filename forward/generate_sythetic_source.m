@@ -1,6 +1,7 @@
 clear
-train = 0;
-n_sources = 2;
+fprintf('Starting generate_sythetic_source.m...\n');
+train = 1;
+n_sources = 1;
 load('../anatomy/fs_cortex_20k_inflated.mat')
 load('../anatomy/fs_cortex_20k.mat')
 load('../anatomy/fs_cortex_20k_region_mapping.mat');
@@ -22,8 +23,11 @@ end
 %% ========================================================================
 %=============== Generate Source Patch ====================================
 %% ======== Region Growing Get Candidate Source Regions ===================
-selected_region_all = cell(994, 1);                                          
-for i=1:994
+n_regions = 1; % Only regions 0 to 9 (a0 to a9)
+fprintf('n_regions set to %d.\n', n_regions);
+selected_region_all = cell(n_regions, 1);                                          
+for i=1:n_regions
+    fprintf('Processing region %d/%d...\n', i, n_regions);
     % get source direction
     selected_region_all{i} = [];
     region_id =i;
@@ -40,6 +44,7 @@ for i=1:994
     ind = ind(1:ceil(length(angs)/2));                                     % directions to grow the region
     % second layer neighbours
     for iter = 1:5
+        fprintf('  2nd layer, iter %d/%d\n', iter, 5);
     all_rg = cell(1,4);
     for k=1:length(ind)
         ii = ind(k); 
@@ -53,6 +58,7 @@ for i=1:994
     end
     % third layer neighbours
     for iter = 1:5
+        fprintf('  3rd layer, iter %d/%d\n', iter, 5);
     all_rg = cell(1,4);
     for k=1:length(ind)
         ii = ind(k); 
@@ -87,18 +93,23 @@ for i=1:994
 %     end
 end
 %% ======== Get Region Center for Each Sample =============================
-selected_region = NAN_NUMBER*ones(994*n_iter, n_sources, MAX_SIZE); 
-n_iter_list = nan(n_iter*(n_sources-1), 994);
+selected_region = NAN_NUMBER*ones(n_regions*n_iter, n_sources, MAX_SIZE); 
+n_iter_list = nan(n_iter*(n_sources-1), n_regions);
 for i = 1:n_iter
     for k=1:(n_sources-1)
-        n_iter_list(i+(k-1)*n_iter,:) = randperm(994);
+        n_iter_list(i+(k-1)*n_iter,:) = randperm(n_regions);
     end
 end
-n_iter_list(n_iter+1,:) = 1:994;
+n_iter_list(n_iter+1,:) = 1:n_regions;
 %% ======== Build Source Patch ============================================
+fprintf('Building source patch...\n');
 for kk = 1:n_iter
-    for ii  = 1:994
-        idx = 994*(kk-1) + ii;
+    fprintf('Building source patch: iter %d/%d\n', kk, n_iter);
+    for ii  = 1:n_regions
+        if mod(ii, 2) == 0
+            fprintf('  Source patch region %d/%d\n', ii, n_regions);
+        end
+        idx = n_regions*(kk-1) + ii;
         tr = selected_region_all{ii};
         if kk <= size(tr, 1) && train
             selected_region(idx,1,:) = tr(kk,:);
@@ -112,28 +123,35 @@ for kk = 1:n_iter
     end
 end
 selected_region_raw = selected_region;
-selected_region = reshape(permute(selected_region_raw, [3,2,1]), MAX_SIZE*n_sources, 994, n_iter);
+selected_region = reshape(permute(selected_region_raw, [3,2,1]), MAX_SIZE*n_sources, n_regions, n_iter);
 selected_region = permute(selected_region,[1,3,2]);
 selected_region = reshape(repmat(selected_region, 4, 1, 1), MAX_SIZE, n_sources, []);  % 4 SNR levels
 selected_region = permute(selected_region,[3,2,1]);
-%% SAVE
+fprintf('Saving selected_region to file...\n');
 dataset_name = 'source1';
 save(['../source/' ds_type '_sample_' dataset_name '.mat'], 'selected_region')
+fprintf('Saved selected_region.\n');
 %% ========================================================================
 %=============== Generate Other Parameters=================================
 %% NMM Signal Waveform
-random_samples = randi([1,nper],994*n_iter*4,n_sources);                 % the waveform index for each source
+random_samples = randi([1,nper],n_regions*n_iter*4,n_sources);                 % the waveform index for each source
 nmm_idx = (selected_region(:,:,1)+1)*nper + random_samples + 1; 
 save(['../source/' ds_type '_sample_' dataset_name '.mat'],'nmm_idx', 'random_samples',  '-append')
+fprintf('Saved nmm_idx and random_samples.\n');
 %% SNR
-current_snr = reshape(repmat(5:5:20,n_iter*994,1)',[],1); 
+current_snr = reshape(repmat(5:5:20,n_iter*n_regions,1)',[],1); 
 save(['../source/' ds_type '_sample_' dataset_name '.mat'],'current_snr', '-append')
+fprintf('Saved current_snr.\n');
 %% Scaling Factor
 load('../anatomy/leadfield_75_20k.mat');
 gt = load(['../source/' ds_type '_sample_' dataset_name '.mat']);
 scale_ratio = [];
 n_source = size(gt.selected_region, 2);
+fprintf('Loading leadfield and sample data for scaling factor...\n');
 for i=1:size(gt.selected_region, 1)
+    if mod(i, 5) == 0
+        fprintf('  Scaling factor progress: %d/%d\n', i, size(gt.selected_region, 1));
+    end
     for k=1:n_source
         a = gt.selected_region(i,k,:);
         a = a(:);
@@ -146,6 +164,7 @@ for i=1:size(gt.selected_region, 1)
         end
     end
 end
+fprintf('Saving scale_ratio...\n',scale_ratio);
 save(['../source/' ds_type '_sample_' dataset_name '.mat'], 'scale_ratio', '-append')
 %% Change Source Magnitude 
 clear mag_change
@@ -162,6 +181,7 @@ for i=1:size(gt.selected_region,1)
     end
 end
 save(['../source/' ds_type '_sample_' dataset_name '.mat'], 'mag_change', '-append')
+fprintf('Saved mag_change.\n');
 %%
 function alpha = find_alpha(region_id, nmm_idx, fwd, target_SNR)
 % Re-scaling NMM channels in source channels
@@ -174,11 +194,21 @@ function alpha = find_alpha(region_id, nmm_idx, fwd, target_SNR)
 % OUTPUTS:
 %     - alpha      : the scaling factor for one patch source
 
-load(['../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'])
+file_path = ['../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'];
+fprintf('  [find_alpha] Loading file: %s\n', file_path);
+if ~isfile(file_path)
+    warning(['File not found: ' file_path ', skipping.']);
+    alpha = NaN;
+    return;
+end
+load(file_path)
+fprintf('  [find_alpha] Loaded file and calculated alpha.\n');
 spike_shape = data(:,region_id(1))/max(data(:,region_id(1)));
 [~, peak_time] = max(spike_shape);
 data(:, region_id) = repmat(spike_shape,1,length(region_id));
-[Ps, Pn, ~] = calcualate_SNR(data, fwd, region_id, max(peak_time-50,0):max(peak_time+50,500));
+start_idx = max(peak_time-50, 1);
+end_idx = min(peak_time+50, size(data,1));
+[Ps, Pn, ~] = calcualate_SNR(data, fwd, region_id, start_idx:end_idx);
 alpha = sqrt(10.^(target_SNR./10).*Pn./Ps);
 end
 

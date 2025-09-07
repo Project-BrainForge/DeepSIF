@@ -4,20 +4,24 @@ function process_raw_nmm(varargin)
 % %%%%%%%%%%%%%% SETUP PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 p = inputParser;
 addParameter(p,'filename','spikes',@ischar);
-addParameter(p,'leadfield_name','leadfield_75_20k.mat', @ischar);
+addParameter(p,'leadfield_name','leadfield_32_20k.mat', @ischar);
 parse(p, varargin{:})
 filename = p.Results.filename;
 headmodel = load(['../anatomy/' p.Results.leadfield_name]);
-fwd = headmodel.fwd;
+fwd = headmodel.downsampled_fwd;
 savefile_path = '../source/';
 
 % -------------------------------------------------------------------------
 iter_list = 0:2;   % the iter during NMM generation.
-previous_iter_spike_num = zeros(1, 994);
-for i_iter = 1:length(iter_list)
+%matrix one row and 994 columns with zeros
+previous_iter_spike_num = zeros(1, 994); 
+for i_iter = 1%length(iter_list)
     iter = iter_list(i_iter);
-    if isempty(dir([savefile_path 'nmm_' filename '/clip_info/iter' int2str(iter)]))
-       mkdir([savefile_path 'nmm_' filename '/clip_info/iter' int2str(iter)])
+    fprintf('[INFO] Starting iteration %d/%d (iter=%d)\n', i_iter, length(iter_list), iter);
+    clipinfo_dir = [savefile_path 'nmm_' filename '/clip_info/iter' int2str(iter)];
+    if isempty(dir(clipinfo_dir))
+       mkdir(clipinfo_dir)
+       fprintf('[INFO] Created clip info directory: %s\n', clipinfo_dir);
     end
 
     % ------- Resume running if the process was interupted ----------------
@@ -28,6 +32,7 @@ for i_iter = 1:length(iter_list)
     end
     remaining_regions = setdiff(1:994, finished_regions+1);
     if isempty(remaining_regions)
+        fprintf('[INFO] All regions for iter=%d are already finished, skipping...\n', iter);
         continue;
     end
 
@@ -36,14 +41,18 @@ for i_iter = 1:length(iter_list)
 
         i = remaining_regions(ii);
         % creat folders to save nmm files
-        if isempty(dir([savefile_path 'nmm_' filename '/a' int2str(i-1)]))
-            mkdir([savefile_path 'nmm_' filename '/a' int2str(i-1)])
+        region_folder = [savefile_path 'nmm_' filename '/a' int2str(i-1)];
+        if isempty(dir(region_folder))
+            mkdir(region_folder)
+            fprintf('[INFO] Created folder for region %d: %s\n', i-1, region_folder);
         end
 
         fn = [savefile_path 'raw_nmm/a' int2str(i-1) '/mean_iter_' int2str(iter) '_a_iter_' int2str(i-1)];
         if isfile([fn '_ds.mat'])                                          % saved downsampled data before
            raw_data = load([fn '_ds.mat']);
            nmm = raw_data.all_data;
+           fprintf('[INFO] Loaded downsampled data for region %d, iter %d\n', i, iter);
+
         else
            sub_iter_nmm_files = dir([fn '_*.mat']);
            all_data = [];
@@ -56,11 +65,13 @@ for i_iter = 1:length(iter_list)
            all_data = all_data(1001:end,:);                                % Remove the unconverged beginning of the sample 
            all_time = all_time(1001:end);
            all_data = downsample(all_data, 4);
-           all_time = downsample(all_time, 4);                                       
-           all_data(:,[8,326,922,950]) = all_data(:,[995,998,997,996]);              % remove empty NMM row
+           all_time = downsample(all_time, 4);                                   
+           %all_data(:,[8,326,922,950]) = all_data(:,[995,998,997,996]);              % remove empty NMM row
            all_data = all_data(:, 1:994);
            save([fn '_ds.mat'],'all_data','all_time')
            nmm = all_data;
+           fprintf('[INFO] Downsampled data built and saved: %s\n', [fn '_ds.mat']);
+           fprintf('[INFO] Processing spike extraction for region %d, iter %d\n', i, iter);
         end
 
         [spike_time, spike_chan] = find_spike_time(nmm);                   % Process raw tvb output to find the spike peak time
@@ -72,7 +83,8 @@ for i_iter = 1:length(iter_list)
         rule2 = (sum(ismember(clear_ind, spike_time(~rule1)), 1) == 0);    % there are no other spikes in the clip
         spike_time = spike_time(rule1);
         spike_time = spike_time(rule2);
-               
+        fprintf('[INFO] Scaling NMM and saving spikes for region %d, iter %d\n', i, iter);
+
         % ----------- Optional :  Scale the NMM here----------------------%
         alpha_value = find_alpha(nmm, fwd, i, spike_time, 15);
         nmm = rescale_nmm_channel(nmm, i, spike_time, alpha_value);       
@@ -91,7 +103,8 @@ for i_iter = 1:length(iter_list)
         save_struct.num_spike = previous_iter_spike_num(i);
         save_struct.spike_time = spike_time;
         parsave([savefile_path 'nmm_' filename '/clip_info/iter' int2str(iter) '/iter_' int2str(iter) '_i_' int2str(i-1) '.mat'], save_struct)
-        sprintf(['iter_' int2str(iter) '_i_%d is done\n'], i-1)
+        fprintf('[INFO] Finished region %d, iter %d, total spikes now: %d\n', i, iter, previous_iter_spike_num(i));
+        fprintf('iter_%d_i_%d is done\n', iter, i-1);
     end % END REGION
 end % END ITER
 end % ENG FUNCTION

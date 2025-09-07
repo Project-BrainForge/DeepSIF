@@ -11,8 +11,8 @@ def main(region_id):
     """ TVB Simulation to generate raw source space dynamics, unit in mV, and ms
     :param region_id: int; source region id, with parameters generating interictal spike activity
     """
-    if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
-        os.mkdir('../source/raw_nmm/a{}/'.format(region_id))
+    # if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
+    os.makedirs('../source/raw_nmm/a{}/'.format(region_id),exist_ok=True)
     start_time = time.time()
     print('------ Generate data of region_id {} ----------'.format(region_id))
     conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_76.zip') # connectivity provided by TVB
@@ -23,7 +23,7 @@ def main(region_id):
     a_range = [3.5]
     A = np.ones((num_region, len(a_range))) * 3.25                                  # the normal A value is 3.25
     A[region_id, :] = a_range
-
+ 
     # define mean and std
     mean_and_std = np.array([[0.087, 0.08, 0.083], [1, 1.7, 1.5]])
     for iter_a in range(A.shape[1]):
@@ -45,18 +45,19 @@ def main(region_id):
                 model=jrm,
                 connectivity=conn,
                 coupling=coupling.SigmoidalJansenRit(a=np.array([1.0])),
-                integrator=integrators.HeunStochastic(dt=2 ** -1, noise=noise.Additive(nsig=sigma)),
+                integrator=integrators.HeunStochastic(dt=1.0, noise=noise.Additive(nsig=sigma)),  # Increased from 0.5 to 1.0 ms
                 monitors=(monitors.Raw(),)
             ).configure()
 
-            # run 200s of simulation, cut it into 20 pieces, 10s each. (Avoid saving large files)
-            for iii in range(20):
-                siml = 1e4
+            # run 50s of simulation, cut it into 10 pieces, 5s each. (Avoid saving large files)
+            for iii in range(10):
+                print(f'Processing region {region_id}, mean_iter {iter_m}, file {iii+1}/10')
+                siml = 5e3  # 5 seconds
                 out = sim.run(simulation_length=siml)
                 (t, data), = out
                 data = (data[:, 1, :, :] - data[:, 2, :, :]).squeeze().astype(np.float32)
 
-                # # in the fsaverage5 mapping, there is no vertices corresponding to region 7,325,921, 949, so change label 994-998 to those id
+                ## in the fsaverage5 mapping, there is no vertices corresponding to region 7,325,921, 949, so change label 994-998 to those id
                 # data[:, 7] = data[:, 994]
                 # data[:, 325] = data[:, 997]
                 # data[:, 921] = data[:, 996]
@@ -87,4 +88,3 @@ if __name__ == '__main__':
     for x in range(args.a_start, args.a_end):
         main(x)
     print('Total_time', time.time() - start_time)
-
