@@ -22,8 +22,9 @@ def get_otsu_regions(out, labels, args_params = None):
     batch_size = labels.shape[0]
     return_eval = dict()
 
-    return_eval['all_regions'] = np.empty((batch_size,), dtype=object)
-    return_eval['all_out'] = np.empty((batch_size,), dtype=object)
+    # Use lists instead of numpy object arrays for better MATLAB compatibility
+    return_eval['all_regions'] = []
+    return_eval['all_out'] = []
 
     for i in range(batch_size):
         thre_source = np.abs(out[i])
@@ -31,8 +32,8 @@ def get_otsu_regions(out, labels, args_params = None):
         thresh = threshold_otsu(thre_source, nbins=100)
         select_pixel = out[i] > thresh
         otsu_region = np.where(np.sum(select_pixel, axis=0) > 7)[0]
-        return_eval['all_regions'][i] = otsu_region
-        return_eval['all_out'][i] = out[i, :, otsu_region]
+        return_eval['all_regions'].append(otsu_region)
+        return_eval['all_out'].append(out[i, :, otsu_region])
 
     # Calculate the eval metrics in Python overall condition for all sources
     if args_params is not None:

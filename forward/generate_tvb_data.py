@@ -8,22 +8,30 @@ import argparse
 
 
 def main(region_id):
-    """ TVB Simulation to generate raw source space dynamics, unit in mV, and ms
+    """TVB Simulation to generate raw source space dynamics, unit in mV, and ms
     :param region_id: int; source region id, with parameters generating interictal spike activity
     """
     # if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
     #     os.mkdir('../source/raw_nmm/a{}/'.format(region_id))
-    
-    os.makedirs('/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmmm/a{}/'.format(region_id), exist_ok=True)
+
+    os.makedirs(
+        "/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmmm/a{}/".format(
+            region_id
+        ),
+        exist_ok=True,
+    )
     start_time = time.time()
-    print('------ Generate data of region_id {} ----------'.format(region_id))
-    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_998.zip') # connectivity provided by TVB
+    print("------ Generate data of region_id {} ----------".format(region_id))
+    conn = connectivity.Connectivity.from_file(
+        source_file=os.getcwd() + "/../anatomy/connectivity_998.zip"
+    )  # connectivity provided by TVB
     conn.configure()
 
     # define A value
     num_region = conn.number_of_regions
+    # num_region = 76
     a_range = [3.5]
-    A = np.ones((num_region, len(a_range))) * 3.25                                  # the normal A value is 3.25
+    A = np.ones((num_region, len(a_range))) * 3.25  # the normal A value is 3.25
     A[region_id, :] = a_range
 
     # define mean and std
@@ -31,10 +39,16 @@ def main(region_id):
     for iter_a in range(A.shape[1]):
         use_A = A[:, iter_a]
         for iter_m in range(mean_and_std.shape[1]):
-
-            jrm = models.JansenRit(A=use_A, mu=np.array(mean_and_std[0][iter_m]),
-                                   v0=np.array([6.]), p_max=np.array([0.15]), p_min=np.array([0.03]))
-            phi_n_scaling = (jrm.a * 3.25 * (jrm.p_max - jrm.p_min) * 0.5 * mean_and_std[1][iter_m]) ** 2 / 2.
+            jrm = models.JansenRit(
+                A=use_A,
+                mu=np.array(mean_and_std[0][iter_m]),
+                v0=np.array([6.0]),
+                p_max=np.array([0.15]),
+                p_min=np.array([0.03]),
+            )
+            phi_n_scaling = (
+                jrm.a * 3.25 * (jrm.p_max - jrm.p_min) * 0.5 * mean_and_std[1][iter_m]
+            ) ** 2 / 2.0
             sigma = np.zeros(6)
             sigma[4] = phi_n_scaling
 
@@ -47,17 +61,25 @@ def main(region_id):
                 model=jrm,
                 connectivity=conn,
                 coupling=coupling.SigmoidalJansenRit(a=np.array([1.0])),
-                integrator=integrators.HeunStochastic(dt=2 ** -1, noise=noise.Additive(nsig=sigma)),
-                monitors=(monitors.Raw(),)
+                integrator=integrators.HeunStochastic(
+                    dt=2**-1, noise=noise.Additive(nsig=sigma)
+                ),
+                monitors=(monitors.Raw(),),
             ).configure()
 
             # run 200s of simulation, cut it into 20 pieces, 10s each. (Avoid saving large files)
             for iii in range(20):
-                print('Running simulation for region_id {} and iteration {}'.format(region_id, iii))
+                print(
+                    "Running simulation for region_id {} and iteration {}".format(
+                        region_id, iii
+                    )
+                )
                 siml = 1e4
                 out = sim.run(simulation_length=siml)
-                (t, data), = out
-                data = (data[:, 1, :, :] - data[:, 2, :, :]).squeeze().astype(np.float32)
+                ((t, data),) = out
+                data = (
+                    (data[:, 1, :, :] - data[:, 2, :, :]).squeeze().astype(np.float32)
+                )
 
                 # # in the fsaverage5 mapping, there is no vertices corresponding to region 7,325,921, 949, so change label 994-998 to those id
                 # data[:, 7] = data[:, 994]
@@ -66,16 +88,23 @@ def main(region_id):
                 # data[:, 949] = data[:, 995]
                 # data = data[:, :994]
 
-                savemat('/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat'.format(region_id, iter_m, region_id, iii),
-                        {'time': t, 'data': data, 'A': use_A})
-    print('Time for', region_id, time.time() - start_time)
+                savemat(
+                    "/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat".format(
+                        region_id, iter_m, region_id, iii
+                    ),
+                    {"time": t, "data": data, "A": use_A},
+                )
+    print("Time for", region_id, time.time() - start_time)
 
 
-if __name__ == '__ main__':
-
-    parser = argparse.ArgumentParser(description='TVB Simulation')
-    parser.add_argument('--a_start', type=int, default=0, metavar='t/f', help='start region id')
-    parser.add_argument('--a_end', type=int, default=1, metavar='t/f', help='end region id')
+if __name__ == "__ main__":
+    parser = argparse.ArgumentParser(description="TVB Simulation")
+    parser.add_argument(
+        "--a_start", type=int, default=0, metavar="t/f", help="start region id"
+    )
+    parser.add_argument(
+        "--a_end", type=int, default=1, metavar="t/f", help="end region id"
+    )
     args = parser.parse_args()
     os.environ["MKL_NUM_THREADS"] = "1"
     start_time = time.time()
@@ -89,5 +118,4 @@ if __name__ == '__ main__':
     # NO PARALLEL
     for x in range(args.a_start, args.a_end):
         main(x)
-    print('Total_time', time.time() - start_time)
-
+    print("Total_time", time.time() - start_time)

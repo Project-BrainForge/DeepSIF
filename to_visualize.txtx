@@ -27,4 +27,4 @@
    end
    
    % Visualize with corrected data
-   visualize_result(pos, tri, processed_data, 'FaceAlpha', 0.5);
+   visualize_result(pos, tri, processed_data, 'FaceAlpha',0.5);

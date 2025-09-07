@@ -32,15 +32,18 @@ for i_iter = 1:length(iter_list)
     end
 
     % -------- start the main progress -----------------------------------%
-    for ii = 1:1%length(remaining_regions)                                 % Change iteration to the num of NMM regions you want to generate
-
+    for ii = 1:5%length(remaining_regions)                                 % Change iteration to the num of NMM regions you want to generate
+        
+        fprintf("current ii %d \n", ii)
         i = remaining_regions(ii);
+        fprintf("current i region %d \n", i)
+       
         % creat folders to save nmm files
         if isempty(dir([savefile_path 'nmm_' filename '/a' int2str(i-1)]))
             mkdir([savefile_path 'nmm_' filename '/a' int2str(i-1)])
         end
 
-        fn = ['/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a0/mean_iter_' int2str(iter) '_a_iter_' int2str(i-1)];
+        fn = ['/Users/pasindusankalpa/Documents/DeepSIF/source/raw_nmm/a' int2str(i-1) '/mean_iter_' int2str(iter) '_a_iter_' int2str(i-1)];
         if isfile([fn '_ds.mat'])                                          % saved downsampled data before
            raw_data = load([fn '_ds.mat']);
            nmm = raw_data.all_data;
@@ -50,8 +53,11 @@ for i_iter = 1:length(iter_list)
            all_data = [];
            all_time = [];
            for sub_iter_i = 1:length(sub_iter_nmm_files)
-               disp(sub_iter_nmm_files(sub_iter_i))
+
+               fprintf("ds  %d \n", sub_iter_i)
+               % disp(sub_iter_nmm_files(sub_iter_i))
                d = load([sub_iter_nmm_files(sub_iter_i).folder '/' sub_iter_nmm_files(sub_iter_i).name]);
+               % fprintf('[INFO]file name1111 %d \n',);
                all_data = [all_data; d.data];
                all_time = [all_time;d.time'];
            end
@@ -62,15 +68,16 @@ for i_iter = 1:length(iter_list)
            all_data(:,[8,326,922,950]) = all_data(:,[995,998,997,996]);              % remove empty NMM row
            all_data = all_data(:, 1:994);
            save([fn '_ds.mat'],'all_data','all_time')
+           fprintf("Saved ds file %d %d %s", ii , i , fn )
            nmm = all_data;
         end
 
         [spike_time, spike_chan] = find_spike_time(nmm);    
         
         % Process raw tvb output to find the spike peak time
-        disp("wijefiujewi")
-        disp(spike_chan)
-        disp(spike_time)
+        % disp("wijefiujewi")
+        % disp(spike_chan)
+        % disp(spike_time)
         
         % ----------- select the spikes we want to extract ---------------%
         rule1 =  (spike_chan == i);   % there is spike in the source region
@@ -84,7 +91,7 @@ for i_iter = 1:length(iter_list)
         % ----------- Optional :  Scale the NMM here----------------------%
         alpha_value = find_alpha(nmm, fwd, i, spike_time, 15);
         nmm = rescale_nmm_channel(nmm, i, spike_time, alpha_value);  
-        disp(nmm(1:10, :));
+        % disp(nmm(1:10, :));
         % ------------Save Spike NMM Data --------------------------------%
         start_time = floor(spike_time/500) * 500 + 1;
         spike_ind = repmat(start_time, [500, 1]) + (0:499)';       
@@ -92,8 +99,8 @@ for i_iter = 1:length(iter_list)
 %         start_time = max(start_time, 101);
 %         spike_ind = repmat(start_time, [500, 1]) + (0:499)';
 
-        disp('Selected Spike Times:');
-        disp(spike_time(rule1));
+        % disp('Selected Spike Times:');
+        % disp(spike_time(rule1));
 
         nmm_data = reshape(nmm(spike_ind,:), 500, [], size(nmm,2));        % size: time * num_spike * channel
         save_spikes_(nmm_data, [savefile_path 'nmm_' filename '/a' int2str(i-1) '/nmm_'], previous_iter_spike_num(i));
@@ -121,22 +128,22 @@ function save_spikes_(spike_data, savefile_path, previous_iter_spike_num)
 % INPUTS: spike_data: time * num_spikes * channel; extracted spike data
 %         savefile_path: string
 
-    disp("Uploaded 111")
-    disp('Size of spike_data:');
+    % disp("Uploaded 111")
+    % disp('Size of spike_data:');
     disp(size(spike_data));  % Print the size of spike_data
 
     if size(spike_data, 2) == 0
-        disp('No spikes to save!');
+        % disp('No spikes to save!');
         return;  % Exit if no spikes are present
     end
 
     for iii = 1:size(spike_data, 2)
-        disp(['Processing spike ', num2str(iii)]);
+        % disp(['Processing spike ', num2str(iii)]);
         data = squeeze(spike_data(:, iii, :));  % Extract data for the current spike
-        disp('Data for current spike:');
-        disp(data);  % Print data for the current spike
+        % disp('Data for current spike:');
+        % disp(data);  % Print data for the current spike
         save([savefile_path int2str(iii + previous_iter_spike_num) '.mat'], 'data', '-v7');
-        disp("Uploaded");
+        % disp("Uploaded");
     end
 end
 
@@ -144,11 +151,11 @@ end
 
 function [spike_time, spike_chan] = find_spike_time(nmm)
     spikes_nmm = nmm;
-    disp('Before thresholding:');
+    % disp('Before thresholding:');
     % disp(spikes_nmm(1:10, :));  % Check the first 10 rows before thresholding
 
     spikes_nmm(nmm < 8) = 0;  % Find the spiking activity stronger than the background
-    disp('After thresholding:');
+    % disp('After thresholding:');
     % disp(spikes_nmm(1:10, :));  % Check the first 10 rows after thresholding
 
     local_max = islocalmax(spikes_nmm);  % Find the peak
