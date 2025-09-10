@@ -12,10 +12,10 @@ def main(region_id):
     :param region_id: int; source region id, with parameters generating interictal spike activity
     """
     # if not os.path.isdir('../source/raw_nmm/a{}/'.format(region_id)):
-    os.makedirs('../source/raw_nmm/a{}/'.format(region_id),exist_ok=True)
+    os.makedirs('./source/raw_nmm/a{}/'.format(region_id),exist_ok=True)
     start_time = time.time()
     print('------ Generate data of region_id {} ----------'.format(region_id))
-    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_76.zip') # connectivity provided by TVB
+    conn = connectivity.Connectivity.from_file('./anatomy/connectivity_998.zip') # connectivity provided by TVB
     conn.configure()
 
     # define A value
@@ -57,14 +57,14 @@ def main(region_id):
                 (t, data), = out
                 data = (data[:, 1, :, :] - data[:, 2, :, :]).squeeze().astype(np.float32)
 
-                ## in the fsaverage5 mapping, there is no vertices corresponding to region 7,325,921, 949, so change label 994-998 to those id
+                # in the fsaverage5 mapping, there is no vertices corresponding to region 7,325,921, 949, so change label 994-998 to those id
                 # data[:, 7] = data[:, 994]
                 # data[:, 325] = data[:, 997]
                 # data[:, 921] = data[:, 996]
                 # data[:, 949] = data[:, 995]
                 # data = data[:, :994]
 
-                savemat('../source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat'.format(region_id, iter_m, region_id, iii),
+                savemat('./source/raw_nmm/a{}/mean_iter_{}_a_iter_{}_{}.mat'.format(region_id, iter_m, region_id, iii),
                         {'time': t, 'data': data, 'A': use_A})
     print('Time for', region_id, time.time() - start_time)
 
@@ -72,8 +72,8 @@ def main(region_id):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='TVB Simulation')
-    parser.add_argument('--a_start', type=int, default=0, metavar='t/f', help='start region id')
-    parser.add_argument('--a_end', type=int, default=1, metavar='t/f', help='end region id')
+    parser.add_argument('--a_start', type=int, default=10, metavar='t/f', help='start region id')
+    parser.add_argument('--a_end', type=int, default=12, metavar='t/f', help='end region id')
     args = parser.parse_args()
     os.environ["MKL_NUM_THREADS"] = "1"
     start_time = time.time()
