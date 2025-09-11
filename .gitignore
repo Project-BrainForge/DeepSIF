@@ -2,3 +2,4 @@ source/raw_nmm/a0/*.mat
 source/raw_nmm/**/*.mat
 source/nmm_spikes/**/*.mat
 source/test_sample_source1.mat
+source/train_sample_source1.mat
