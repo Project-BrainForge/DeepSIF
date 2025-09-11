@@ -1,5 +1,5 @@
 clear
-train = 0;
+train = 1;
 n_sources = 2;
 load('../anatomy/fs_cortex_20k_inflated.mat')
 load('../anatomy/fs_cortex_20k.mat')
@@ -173,12 +173,21 @@ function alpha = find_alpha(region_id, nmm_idx, fwd, target_SNR)
 %     - target_SNR : set snr between signal and the background activity.
 % OUTPUTS:
 %     - alpha      : the scaling factor for one patch source
-
-load(['../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'])
+try
+    load(['../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'])
+catch
+    disp(['Error loading ../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'])
+    alpha = ones(1,length(target_SNR));
+    return;
+end
+% load(['../source/nmm_spikes/a' int2str(region_id(1)-1) '/nmm_' int2str(nmm_idx) '.mat'])
 spike_shape = data(:,region_id(1))/max(data(:,region_id(1)));
 [~, peak_time] = max(spike_shape);
 data(:, region_id) = repmat(spike_shape,1,length(region_id));
-[Ps, Pn, ~] = calcualate_SNR(data, fwd, region_id, max(peak_time-50,0):max(peak_time+50,500));
+if(peak_time+50>500)
+    peak_time = 450;
+end
+[Ps, Pn, ~] = calcualate_SNR(data, fwd, region_id, max(peak_time-50,1):max(peak_time+50,500));
 alpha = sqrt(10.^(target_SNR./10).*Pn./Ps);
 end
 
