@@ -32,7 +32,7 @@ for i_iter = 1:length(iter_list)
     end
 
     % -------- start the main progress -----------------------------------%
-    for ii = 1:1%length(remaining_regions)                                 % Change iteration to the num of NMM regions you want to generate
+    for ii = 1:1%length(remaining_regions)         % Change iteration to the num of NMM regions you want to generate
 
         i = remaining_regions(ii);
         % creat folders to save nmm files
@@ -66,10 +66,11 @@ for i_iter = 1:length(iter_list)
         [spike_time, spike_chan] = find_spike_time(nmm);                   % Process raw tvb output to find the spike peak time
         
         % ----------- select the spikes we want to extract ---------------%
-        rule1 =  (spike_chan == i);                                        % there is spike in the source region
+        rule1 =  (spike_chan == i);  
+        %500 --- 500                                      % there is spike in the source region
         start_time = floor(spike_time(rule1)/500) * 500 + 1;               % there is no source in other region in the clip
         clear_ind = repmat(start_time, [900, 1]) + (-200:699)';            % 900 * num_spike
-        rule2 = (sum(ismember(clear_ind, spike_time(~rule1)), 1) == 0);    % there are no other spikes in the clip
+        rule2 = (sum(ismember(clear_ind, spike_time(~rule1)), 1) == 0);    % there are no other spikes in the clip(900 interval)
         spike_time = spike_time(rule1);
         spike_time = spike_time(rule2);
                
