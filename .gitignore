@@ -1,2 +1,7 @@
 source/raw_nmm/a0/*.mat
 source/raw_nmm/**/*.mat
+source/nmm_spikes
+source/Simulation
+source/VEP
+model_result
+__pycache__
