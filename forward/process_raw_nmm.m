@@ -4,18 +4,18 @@ function process_raw_nmm(varargin)
 % %%%%%%%%%%%%%% SETUP PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 p = inputParser;
 addParameter(p,'filename','spikes',@ischar);
-addParameter(p,'leadfield_name','leadfield_32_20k.mat', @ischar);
+addParameter(p,'leadfield_name','leadfield_75_20k.mat', @ischar);
 parse(p, varargin{:})
 filename = p.Results.filename;
 headmodel = load(['../anatomy/' p.Results.leadfield_name]);
-fwd = headmodel.downsampled_fwd;
+fwd = headmodel.fwd;
 savefile_path = '../source/';
 
 % -------------------------------------------------------------------------
 iter_list = 0:2;   % the iter during NMM generation.
 %matrix one row and 994 columns with zeros
 previous_iter_spike_num = zeros(1, 994); 
-for i_iter = 1%length(iter_list)
+for i_iter = 1:length(iter_list)
     iter = iter_list(i_iter);
     fprintf('[INFO] Starting iteration %d/%d (iter=%d)\n', i_iter, length(iter_list), iter);
     clipinfo_dir = [savefile_path 'nmm_' filename '/clip_info/iter' int2str(iter)];
