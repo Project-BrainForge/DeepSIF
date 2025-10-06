@@ -15,7 +15,7 @@ def main(region_id):
     os.makedirs('../source/raw_nmm/a{}/'.format(region_id),exist_ok=True)
     start_time = time.time()
     print('------ Generate data of region_id {} ----------'.format(region_id))
-    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_76.zip') # connectivity provided by TVB
+    conn = connectivity.Connectivity.from_file(source_file=os.getcwd()+'/../anatomy/connectivity_998.zip') # connectivity provided by TVB
     conn.configure()
 
     # define A value
@@ -45,7 +45,7 @@ def main(region_id):
                 model=jrm,
                 connectivity=conn,
                 coupling=coupling.SigmoidalJansenRit(a=np.array([1.0])),
-                integrator=integrators.HeunStochastic(dt=1.0, noise=noise.Additive(nsig=sigma)),  # Increased from 0.5 to 1.0 ms
+                integrator=integrators.HeunStochastic(dt=0.5, noise=noise.Additive(nsig=sigma)),  # Increased from 0.5 to 1.0 ms
                 monitors=(monitors.Raw(),)
             ).configure()
 
