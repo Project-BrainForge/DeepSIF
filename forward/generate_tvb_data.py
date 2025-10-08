@@ -50,9 +50,9 @@ def main(region_id):
             ).configure()
 
             # run 50s of simulation, cut it into 10 pieces, 5s each. (Avoid saving large files)
-            for iii in range(10):
+            for iii in range(20):
                 print(f'Processing region {region_id}, mean_iter {iter_m}, file {iii+1}/10')
-                siml = 5e3  # 5 seconds
+                siml = 10e3  # 5 seconds
                 out = sim.run(simulation_length=siml)
                 (t, data), = out
                 data = (data[:, 1, :, :] - data[:, 2, :, :]).squeeze().astype(np.float32)
