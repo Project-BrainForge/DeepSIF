@@ -2,8 +2,41 @@ import torch
 import numpy as np
 import os
 import argparse
-from scipy.io import loadmat
+import h5py
+import scipy.io
 from run_deepsif import load_model, run_inference, save_results, load_eeg_from_mat
+
+def load_mat_file(filepath):
+    """Load .mat file, handling MATLAB, HDF5, and Octave text formats"""
+    # First check if it's an Octave text format file
+    try:
+        with open(filepath, 'rb') as f:
+            header = f.read(20)
+            if b'Created by Octave' in header:
+                print("Detected Octave text format, converting to binary...")
+                print("ERROR: This file was saved in Octave's text format.")
+                print("Please re-save it in Octave using: save('-v7', 'filename.mat', 'variable_name')")
+                print("Or use: save('-binary', 'filename.mat', 'variable_name')")
+                raise ValueError("Octave text format not supported. Please re-save in binary format.")
+    except Exception as e:
+        if "text format not supported" in str(e):
+            raise
+    
+    try:
+        # Try loading with scipy (for MATLAB v7 and earlier)
+        return scipy.io.loadmat(filepath)
+    except (ValueError, NotImplementedError, OSError):
+        # If that fails, try h5py (for MATLAB v7.3 and later)
+        print("Detected MATLAB v7.3+ format, using h5py...")
+        mat_dict = {}
+        with h5py.File(filepath, 'r') as f:
+            for key in f.keys():
+                if not key.startswith('#'):  # Skip HDF5 metadata
+                    try:
+                        mat_dict[key] = np.array(f[key])
+                    except:
+                        mat_dict[key] = f[key]
+        return mat_dict
 
 def main():
     parser = argparse.ArgumentParser(description="Run DeepSIF on EEG data")
@@ -29,10 +62,10 @@ def main():
         print(f"Loading EEG data from {args.eeg_file}")
         try:
             # First, inspect the MAT file structure to help identify the right variable
-            mat_contents = loadmat(args.eeg_file)
+            mat_contents = load_mat_file(args.eeg_file)
             print("MAT file variables:")
             for key in mat_contents.keys():
-                if not key.startswith('__'):  # Skip metadata fields
+                if not key.startswith('__') and not key.startswith('#'):  # Skip metadata fields
                     print(f"  - {key}: {type(mat_contents[key])} with shape {mat_contents[key].shape if hasattr(mat_contents[key], 'shape') else 'N/A'}")
             
             # Load the actual data

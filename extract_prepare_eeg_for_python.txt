@@ -1,0 +1,25 @@
+function extract_and_rename_eeg(input_filename)
+  % Load the .mat file
+  data = load(input_filename);
+
+  % Check if 'eeg_data' exists
+  if isfield(data, 'eeg_data')
+    data = data.eeg_data;
+
+    % Save eeg_data to a temporary file
+    save('temp_output.mat', 'data');
+
+    % Rename to data1.mat
+    if exist('data1.mat', 'file')
+      delete('data1.mat'); % Optional: remove if already exists
+    end
+    movefile('temp_output.mat', 'data1.mat');
+
+    fprintf('EEG data extracted and saved to data1.mat\n');
+  else
+    error('eeg_data not found in %s\n', input_filename);
+  end
+end
+
+% Example usage:
+extract_and_rename_eeg('sample_00001.mat');
