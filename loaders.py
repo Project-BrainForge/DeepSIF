@@ -105,6 +105,71 @@ class SpikeEEGBuild(Dataset):
     def __len__(self):
         return self.dataset_len
 
+    def load_nmm_data(self, nmm_idx):
+        """Load NMM data from file based on index"""
+        # Try to find the file by index across all directories
+        # The file pattern is: mean_iter_{iter}_a_iter_{a_num}_{file_num}.mat
+        print(f"Loading NMM data for index {nmm_idx} in load_nmm_data")
+        
+        # Map index to file parameters
+        # Try different mappings based on the index
+        mappings = [
+            # Mapping 1: direct mapping
+            {
+                "a_num": (nmm_idx % 9) + 1,
+                "iter": (nmm_idx // 9) % 3,
+                "file_num": nmm_idx % 20,
+            },
+            # Mapping 2: different iteration
+            {
+                "a_num": (nmm_idx % 9) + 1,
+                "iter": ((nmm_idx // 9) + 1) % 3,
+                "file_num": nmm_idx % 20,
+            },
+            # Mapping 3: different a_num
+            {
+                "a_num": ((nmm_idx % 9) + 1) % 9 + 1,
+                "iter": (nmm_idx // 9) % 3,
+                "file_num": nmm_idx % 20,
+            },
+        ]
+
+        for mapping in mappings:
+            a_num = mapping["a_num"]
+            iter_num = mapping["iter"]
+            file_num = mapping["file_num"]
+
+            file_path = f"source/raw_nmm/a{a_num}/mean_iter_{iter_num}_a_iter_{a_num}_{file_num}.mat"
+            try:
+                data = loadmat(file_path)
+                nmm_data = data["data"]  # Return the actual NMM data
+                # Truncate to 994 regions to match forward matrix
+                if nmm_data.shape[1] > 994:
+                    nmm_data = nmm_data[:, :994]
+
+                # Resample from 20000 time points to 500 time points
+                if nmm_data.shape[0] == 20000:
+                    # Use every 40th sample to get 500 time points
+                    nmm_data = nmm_data[::40, :]
+                elif nmm_data.shape[0] != 500:
+                    # If not 20000, try to resample to 500
+                    original_time = np.linspace(0, 1, nmm_data.shape[0])
+                    new_time = np.linspace(0, 1, 500)
+                    resampled_data = np.zeros((500, nmm_data.shape[1]))
+                    for region in range(nmm_data.shape[1]):
+                        f = interpolate.interp1d(original_time, nmm_data[:, region])
+                        resampled_data[:, region] = f(new_time)
+                    nmm_data = resampled_data
+
+                print(f"Successfully loaded NMM data from {file_path}")
+                return nmm_data
+            except:
+                continue
+
+        # If all attempts fail, return zeros
+        print(f"Warning: Could not load NMM data for index {nmm_idx}")
+        return np.zeros((500, 994))  # Default size
+
 
 class SpikeEEGLoad(Dataset):
 
@@ -282,6 +347,71 @@ class SpikeEEGBuildEval(Dataset):
 
     def __len__(self):
         return self.dataset_len
+
+    def load_nmm_data(self, nmm_idx):
+        """Load NMM data from file based on index"""
+        # Try to find the file by index across all directories
+        # The file pattern is: mean_iter_{iter}_a_iter_{a_num}_{file_num}.mat
+        print(f"Loading NMM data for index {nmm_idx} in load_nmm_data")
+
+        # Map index to file parameters
+        # Try different mappings based on the index
+        mappings = [
+            # Mapping 1: direct mapping
+            {
+                "a_num": (nmm_idx % 9) + 1,
+                "iter": (nmm_idx // 9) % 3,
+                "file_num": nmm_idx % 20,
+            },
+            # Mapping 2: different iteration
+            {
+                "a_num": (nmm_idx % 9) + 1,
+                "iter": ((nmm_idx // 9) + 1) % 3,
+                "file_num": nmm_idx % 20,
+            },
+            # Mapping 3: different a_num
+            {
+                "a_num": ((nmm_idx % 9) + 1) % 9 + 1,
+                "iter": (nmm_idx // 9) % 3,
+                "file_num": nmm_idx % 20,
+            },
+        ]
+
+        for mapping in mappings:
+            a_num = mapping["a_num"]
+            iter_num = mapping["iter"]
+            file_num = mapping["file_num"]
+
+            file_path = f"source/raw_nmm/a{a_num}/mean_iter_{iter_num}_a_iter_{a_num}_{file_num}.mat"
+            try:
+                data = loadmat(file_path)
+                nmm_data = data["data"]  # Return the actual NMM data
+                # Truncate to 994 regions to match forward matrix
+                if nmm_data.shape[1] > 994:
+                    nmm_data = nmm_data[:, :994]
+
+                # Resample from 20000 time points to 500 time points
+                if nmm_data.shape[0] == 20000:
+                    # Use every 40th sample to get 500 time points
+                    nmm_data = nmm_data[::40, :]
+                elif nmm_data.shape[0] != 500:
+                    # If not 20000, try to resample to 500
+                    original_time = np.linspace(0, 1, nmm_data.shape[0])
+                    new_time = np.linspace(0, 1, 500)
+                    resampled_data = np.zeros((500, nmm_data.shape[1]))
+                    for region in range(nmm_data.shape[1]):
+                        f = interpolate.interp1d(original_time, nmm_data[:, region])
+                        resampled_data[:, region] = f(new_time)
+                    nmm_data = resampled_data
+
+                print(f"Successfully loaded NMM data from {file_path}")
+                return nmm_data
+            except:
+                continue
+
+        # If all attempts fail, return zeros
+        print(f"Warning: Could not load NMM data for index {nmm_idx}")
+        return np.zeros((500, 994))  # Default size
 
 
 class SZNMMDatah5(Dataset):

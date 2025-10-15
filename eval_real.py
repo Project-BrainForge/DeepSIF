@@ -12,11 +12,15 @@ import network
 def main():
     start_time = time.time()
     # parse the input
-    parser = argparse.ArgumentParser(description='DeepSIF Model')
-    parser.add_argument('--device', default='cpu', type=str, help='device running the code')
-    parser.add_argument('--model_id', type=int, default=64, help='model id')
-    parser.add_argument('--resume', default='', type=str, help='epoch id to resume')
-    parser.add_argument('--info', default='', type=str, help='other information regarding this model')
+    parser = argparse.ArgumentParser(description="DeepSIF Model")
+    parser.add_argument(
+        "--device", default="cpu", type=str, help="device running the code"
+    )
+    parser.add_argument("--model_id", type=int, default=3, help="model id")
+    parser.add_argument("--resume", default="", type=str, help="epoch id to resume")
+    parser.add_argument(
+        "--info", default="", type=str, help="other information regarding this model"
+    )
     args = parser.parse_args()
 
     # ======================= PREPARE PARAMETERS =====================================================================================================

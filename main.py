@@ -17,22 +17,45 @@ import loaders
 def main():
     start_time = time.time()
     # parse the input
-    parser = argparse.ArgumentParser(description='DeepSIF Model')
-    parser.add_argument('--save', type=int, default=True, help='save each epoch or not')
-    parser.add_argument('--workers', default=0, type=int, help='number of data loading workers')
-    parser.add_argument('--batch_size', default=64, type=int, help='batch size')
-    parser.add_argument('--device', default='cuda:0', type=str, help='device running the code')
-    parser.add_argument('--arch', default='TemporalInverseNet', type=str, help='network achitecture class')
-    parser.add_argument('--dat', default='SpikeEEGBuild', type=str, help='data loader')
-    parser.add_argument('--train', default='test_sample_source2.mat', type=str, help='train dataset name or directory')
-    parser.add_argument('--test', default='test_sample_source2.mat', type=str, help='test dataset name or directory')
-    parser.add_argument('--model_id', default=75, type=int, help='model id')
-    parser.add_argument('--lr', default=3e-4, type=float, help='learning rate')
-    parser.add_argument('--resume', default='1', type=str, help='epoch id to resume')
-    parser.add_argument('--epoch', default=20, type=int, help='total number of epoch')
-    parser.add_argument('--fwd', default='leadfield_75_20k.mat', type=str, help='forward matrix to use')
-    parser.add_argument('--rnn_layer', default=3, type=int, help='number of rnn layer')
-    parser.add_argument('--info', default='', type=str, help='other information regarding this model')
+    parser = argparse.ArgumentParser(description="DeepSIF Model")
+    parser.add_argument("--save", type=int, default=True, help="save each epoch or not")
+    parser.add_argument(
+        "--workers", default=0, type=int, help="number of data loading workers"
+    )
+    parser.add_argument("--batch_size", default=64, type=int, help="batch size")
+    parser.add_argument(
+        "--device", default="cuda:0", type=str, help="device running the code"
+    )
+    parser.add_argument(
+        "--arch",
+        default="TemporalInverseNet",
+        type=str,
+        help="network achitecture class",
+    )
+    parser.add_argument("--dat", default="SpikeEEGBuild", type=str, help="data loader")
+    parser.add_argument(
+        "--train",
+        default="test_sample_source1.mat",
+        type=str,
+        help="train dataset name or directory",
+    )
+    parser.add_argument(
+        "--test",
+        default="test_sample_source1.mat",
+        type=str,
+        help="test dataset name or directory",
+    )
+    parser.add_argument("--model_id", default=3, type=int, help="model id")
+    parser.add_argument("--lr", default=3e-4, type=float, help="learning rate")
+    parser.add_argument("--resume", default="1", type=str, help="epoch id to resume")
+    parser.add_argument("--epoch", default=20, type=int, help="total number of epoch")
+    parser.add_argument(
+        "--fwd", default="leadfield_75_20k.mat", type=str, help="forward matrix to use"
+    )
+    parser.add_argument("--rnn_layer", default=3, type=int, help="number of rnn layer")
+    parser.add_argument(
+        "--info", default="", type=str, help="other information regarding this model"
+    )
     args = parser.parse_args()
 
     # ======================= PREPARE PARAMETERS =====================================================================================================
@@ -43,7 +66,7 @@ def main():
     result_root = 'model_result/{}_the_model'.format(args.model_id)
     if not os.path.exists(result_root):
         os.makedirs(result_root)
-    fwd = loadmat('anatomy/{}'.format(args.fwd))['fwd']
+    fwd = loadmat("anatomy/{}".format(args.fwd))["fwd"]
 
     # Define logger
     logger = logging.getLogger(__name__)
@@ -67,17 +90,24 @@ def main():
 
     # ================================== CREATE MODEL ================================================================================================
 
-    net = network.__dict__[args.arch](num_sensor=75, num_source=994, rnn_layer=args.rnn_layer,
-                                      spatial_model=network.MLPSpatialFilter,
-                                      temporal_model=network.TemporalFilter,
-                                      spatial_output='value_activation', temporal_output='rnn', spatial_activation='ELU', temporal_activation='ELU',
-                                      temporal_input_size=500).to(device)
+    net = network.__dict__[args.arch](
+        num_sensor=75,
+        num_source=994,
+        rnn_layer=args.rnn_layer,
+        spatial_model=network.MLPSpatialFilter,
+        temporal_model=network.TemporalFilter,
+        spatial_output="value_activation",
+        temporal_output="rnn",
+        spatial_activation="ELU",
+        temporal_activation="ELU",
+        temporal_input_size=500,
+    ).to(device)
     optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=1e-6)
     # lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, verbose=True, threshold=0.001)
     criterion = torch.nn.MSELoss(reduction='sum')
 
     args.start_epoch = 0
-    best_result = np.Inf
+    best_result = np.inf
     train_loss = []
     test_loss = []
 
