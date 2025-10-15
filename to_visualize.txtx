@@ -1,5 +1,5 @@
 % Load the model output
-   load('source/VEP/rnn_test_2_.path.tar.mat');
+   load('E:\DeepSIF\DeepSif -BrainForge Repo\DeepSIF\vep_source_estimate.mat');
    % This loads the 'source_estimate' variable into your workspace
 
    % Load the cortex data
@@ -28,3 +28,5 @@
    
    % Visualize with corrected data
    visualize_result(pos, tri, processed_data, 'FaceAlpha',0.5);
+
+   %if using octave [visualize_result(pos, tri, processed_data);]
