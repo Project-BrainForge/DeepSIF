@@ -35,8 +35,10 @@ def main():
     print("=> Load checkpoint", fn)
     if os.path.isfile(fn):
         print("=> Found checkpoint '{}'".format(fn))
-        checkpoint = torch.load(fn, map_location=torch.device('cpu'))
+        checkpoint = torch.load(fn, map_location=torch.device('cpu'), weights_only=False)
+
         best_result = checkpoint['best_result']
+
         net = network.__dict__[checkpoint['arch']](*checkpoint['attribute_list']).to(device)  # redefine the weights architecture
         net.load_state_dict(checkpoint['state_dict'], strict=False)
         print("=> Loaded checkpoint {}, current results: {}".format(fn, best_result))
@@ -53,7 +55,9 @@ def main():
     for pii in subject_list:
         folder_name = 'source/{}'.format(pii)
         start_time = time.time()
+
         flist = glob.glob(folder_name + '/data*.mat')
+
         if len(flist) == 0:
             print('WARNING: NO FILE IN FOLDER {}.'.format(folder_name))
             continue

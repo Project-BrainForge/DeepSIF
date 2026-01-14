@@ -1,5 +1,5 @@
 % Load the model output
-   load('source/VEP/rnn_test_2_.path.tar.mat');
+   load('source/VEP/rnn_test_1_.pth.tar.mat');
    % This loads the 'all_out' variable into your workspace
 
    % Load the cortex data
