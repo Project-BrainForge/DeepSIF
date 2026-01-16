@@ -40,7 +40,13 @@ def main():
     device = torch.device(args.device if use_cuda else "cpu")
 
     data_root = 'source/Simulation/'
-    result_root = 'model_result/{}_the_model'.format(args.model_id)
+    
+    # Detect Kaggle environment and set result path accordingly
+    if os.path.exists('/kaggle/working'):
+        result_root = '/kaggle/working/model_result/{}_the_model'.format(args.model_id)
+    else:
+        result_root = 'model_result/{}_the_model'.format(args.model_id)
+    
     if not os.path.exists(result_root):
         os.makedirs(result_root)
     fwd = loadmat('anatomy/{}'.format(args.fwd))['fwd']
@@ -59,10 +65,14 @@ def main():
             logger.info('{} is {}'.format(v, args.__dict__[v]))
 
     # ================================== LOAD DATA ===================================================================================================
-    train_data = loaders.__dict__[args.dat](data_root + args.train, fwd=fwd,
+    # Handle both absolute and relative paths
+    train_path = args.train if os.path.isabs(args.train) else data_root + args.train
+    test_path = args.test if os.path.isabs(args.test) else data_root + args.test
+    
+    train_data = loaders.__dict__[args.dat](train_path, fwd=fwd,
                                                 args_params={'dataset_len': 4})
     train_loader = DataLoader(train_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=True)
-    test_data = loaders.__dict__[args.dat](data_root + args.test, fwd=fwd, args_params={'dataset_len': 4})
+    test_data = loaders.__dict__[args.dat](test_path, fwd=fwd, args_params={'dataset_len': 4})
     test_loader = DataLoader(test_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=False)
 
     # ================================== CREATE MODEL ================================================================================================
