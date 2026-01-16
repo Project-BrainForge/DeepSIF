@@ -77,7 +77,7 @@ def main():
     criterion = torch.nn.MSELoss(reduction='sum')
 
     args.start_epoch = 0
-    best_result = np.Inf
+    best_result = np.inf
     train_loss = []
     test_loss = []
 
@@ -87,7 +87,7 @@ def main():
         fn = os.path.join(result_root, 'epoch_' + args.resume)
         if os.path.isfile(fn):
             print("=> Found checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(fn, map_location=torch.device('cpu'))
+            checkpoint = torch.load(fn, map_location=torch.device('cpu'), weights_only=False)
             args.start_epoch = checkpoint['epoch']
             best_result = checkpoint['best_result']
             # recreate net and optimizer based on the saved model

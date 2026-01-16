@@ -1,4 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Data files
 source/raw_nmm/a0/*.mat
 source/raw_nmm/**/*.mat
 source/nmm_spikes/**/*.mat
 source/test_sample_source1.mat
+source/Simulation/**/*.mat
+source/VEP/**/*.mat
+source/Data/**/*
+source/ictal_source_waveform.mat
+region_visualization_scripts/*.mat
+
+# Anatomy files (large, can be re-downloaded)
+anatomy/*.mat
+
+# Model outputs
+model_result/
+model_weights/*.pt
+
+# Logs
+*.log
+outputs_*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints

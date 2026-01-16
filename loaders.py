@@ -149,6 +149,87 @@ class SpikeEEGLoad(Dataset):
     def __len__(self):
         return self.dataset_len
 
+class CustomLabeledDataset(Dataset):
+
+    """Dataset loader for custom labeled data
+    
+    Expects .mat files named as: sample_xxxxx.mat
+    Each file must contain keys: 'eeg_data', 'source_data', 'labels', 'snr', 'index'
+    
+    Attributes
+    ----------
+    data_root : str
+        Dataset folder location containing sample_xxxxx.mat files
+    fwd : np.array
+        Size is num_electrode * num_region (not used in this loader but kept for consistency)
+    dataset_len : int
+        size of the dataset
+    """
+
+    def __init__(self, data_root, fwd, transform=None, args_params=None):
+
+        # args_params: optional parameters; can be dataset_len
+
+        self.file_path = data_root
+        self.fwd = fwd
+        self.transform = transform
+        
+        # Get list of all sample_*.mat files
+        import glob
+        import os
+        file_pattern = os.path.join(self.file_path, 'sample_*.mat')
+        matched_files = sorted(glob.glob(file_pattern))
+        self.file_list = [os.path.basename(f) for f in matched_files]
+        self.dataset_len = len(self.file_list)
+        
+        print(f"Auto-detected {self.dataset_len} files in {self.file_path}")
+        if self.dataset_len == 0:
+            print(f"WARNING: No files found matching pattern: {file_pattern}")
+        else:
+            print(f"First file: {self.file_list[0]}, Last file: {self.file_list[-1]}")
+        
+        # Allow manual override of dataset length
+        if args_params and 'dataset_len' in args_params:
+            self.dataset_len = min(args_params['dataset_len'], self.dataset_len)
+            print(f"Using subset of {self.dataset_len} files")
+
+    def __getitem__(self, index):
+
+        # Get file from the sorted file list
+        file_name = self.file_list[index]
+        file_path = f'{self.file_path}/{file_name}'
+        
+        # Load data from .mat file
+        raw_data = loadmat(file_path)
+        
+        # Extract data with expected keys
+        eeg_data = raw_data['eeg_data'].astype('float32')          # (500, 75)
+        source_data = raw_data['source_data'].astype('float32')    # (500, 994)
+        labels = raw_data['labels'].flatten().astype(np.int32)     # variable length
+        snr_value = float(raw_data['snr'].item()) if hasattr(raw_data['snr'], 'item') else float(raw_data['snr'])
+        
+        # Remove zero padding from labels (assumes 0 means no label)
+        labels = labels[labels > 0]
+        
+        # Pad labels to fixed size (70) for batching using DeepSIF's padding value
+        max_label_size = 70
+        padded_labels = np.ones(max_label_size) * 15213  # 15213 is the padding value
+        padded_labels[:len(labels)] = labels
+        
+        sample = {
+            'data': eeg_data,
+            'nmm': source_data,
+            'label': padded_labels.astype(np.int32),
+            'snr': snr_value
+        }
+        
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+    def __len__(self):
+        return self.dataset_len
 
 class SpikeEEGBuildEval(Dataset):
 
@@ -395,6 +476,8 @@ class SZNMMDatah5(Dataset):
 
     def __len__(self):
         return self.dataset_len
+
+
 
 # from matplotlib import pyplot as plt
 # plt.subplot(1,2,1)
