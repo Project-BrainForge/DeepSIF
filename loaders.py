@@ -173,18 +173,42 @@ class CustomLabeledDataset(Dataset):
         self.file_path = data_root
         self.fwd = fwd
         self.transform = transform
+        self.required_keys = ['eeg_data', 'source_data', 'labels', 'snr']
         
-        # Get list of all sample_*.mat files
+        # Get list of all sample_*.mat files (excludes other files like extraction_metadata.mat)
         import glob
         import os
         file_pattern = os.path.join(self.file_path, 'sample_*.mat')
         matched_files = sorted(glob.glob(file_pattern))
-        self.file_list = [os.path.basename(f) for f in matched_files]
+        
+        # Validate files and keep only those with required keys
+        self.file_list = []
+        skipped_count = 0
+        
+        print(f"Scanning {len(matched_files)} sample_*.mat files in {self.file_path}")
+        
+        for file_path in matched_files:
+            try:
+                # Quick check: load file and verify required keys exist
+                test_data = loadmat(file_path)
+                if all(key in test_data for key in self.required_keys):
+                    self.file_list.append(os.path.basename(file_path))
+                else:
+                    missing_keys = [key for key in self.required_keys if key not in test_data]
+                    print(f"⚠️ Skipping {os.path.basename(file_path)}: missing keys {missing_keys}")
+                    skipped_count += 1
+            except Exception as e:
+                print(f"⚠️ Skipping {os.path.basename(file_path)}: error loading file - {str(e)}")
+                skipped_count += 1
+        
         self.dataset_len = len(self.file_list)
         
-        print(f"Auto-detected {self.dataset_len} files in {self.file_path}")
+        print(f"✓ Validated {self.dataset_len} valid files")
+        if skipped_count > 0:
+            print(f"⚠️ Skipped {skipped_count} invalid files")
+        
         if self.dataset_len == 0:
-            print(f"WARNING: No files found matching pattern: {file_pattern}")
+            print(f"ERROR: No valid files found matching pattern: {file_pattern}")
         else:
             print(f"First file: {self.file_list[0]}, Last file: {self.file_list[-1]}")
         
@@ -199,34 +223,43 @@ class CustomLabeledDataset(Dataset):
         file_name = self.file_list[index]
         file_path = f'{self.file_path}/{file_name}'
         
-        # Load data from .mat file
-        raw_data = loadmat(file_path)
-        
-        # Extract data with expected keys
-        eeg_data = raw_data['eeg_data'].astype('float32')          # (500, 75)
-        source_data = raw_data['source_data'].astype('float32')    # (500, 994)
-        labels = raw_data['labels'].flatten().astype(np.int32)     # variable length
-        snr_value = float(raw_data['snr'].item()) if hasattr(raw_data['snr'], 'item') else float(raw_data['snr'])
-        
-        # Remove zero padding from labels (assumes 0 means no label)
-        labels = labels[labels > 0]
-        
-        # Pad labels to fixed size (70) for batching using DeepSIF's padding value
-        max_label_size = 70
-        padded_labels = np.ones(max_label_size) * 15213  # 15213 is the padding value
-        padded_labels[:len(labels)] = labels
-        
-        sample = {
-            'data': eeg_data,
-            'nmm': source_data,
-            'label': padded_labels.astype(np.int32),
-            'snr': snr_value
-        }
-        
-        if self.transform:
-            sample = self.transform(sample)
+        try:
+            # Load data from .mat file
+            raw_data = loadmat(file_path)
+            
+            # Verify all required keys are present (should always pass due to validation in __init__)
+            if not all(key in raw_data for key in self.required_keys):
+                raise KeyError(f"Missing required keys in {file_name}")
+            
+            # Extract data with expected keys
+            eeg_data = raw_data['eeg_data'].astype('float32')          # (500, 75)
+            source_data = raw_data['source_data'].astype('float32')    # (500, 994)
+            labels = raw_data['labels'].flatten().astype(np.int32)     # variable length
+            snr_value = float(raw_data['snr'].item()) if hasattr(raw_data['snr'], 'item') else float(raw_data['snr'])
+            
+            # Remove zero padding from labels (assumes 0 means no label)
+            labels = labels[labels > 0]
+            
+            # Pad labels to fixed size (70) for batching using DeepSIF's padding value
+            max_label_size = 70
+            padded_labels = np.ones(max_label_size) * 15213  # 15213 is the padding value
+            padded_labels[:len(labels)] = labels
+            
+            sample = {
+                'data': eeg_data,
+                'nmm': source_data,
+                'label': padded_labels.astype(np.int32),
+                'snr': snr_value
+            }
+            
+            if self.transform:
+                sample = self.transform(sample)
 
-        return sample
+            return sample
+            
+        except Exception as e:
+            print(f"ERROR loading {file_name}: {str(e)}")
+            raise
 
     def __len__(self):
         return self.dataset_len

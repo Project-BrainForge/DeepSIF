@@ -70,9 +70,9 @@ def main():
     test_path = args.test if os.path.isabs(args.test) else data_root + args.test
     
     train_data = loaders.__dict__[args.dat](train_path, fwd=fwd,
-                                                args_params={'dataset_len': 4})
+                                                args_params={'dataset_len': 65000})
     train_loader = DataLoader(train_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=True)
-    test_data = loaders.__dict__[args.dat](test_path, fwd=fwd, args_params={'dataset_len': 4})
+    test_data = loaders.__dict__[args.dat](test_path, fwd=fwd, args_params={'dataset_len': 1000})
     test_loader = DataLoader(test_data, batch_size=args.batch_size, num_workers=args.workers, pin_memory=True, shuffle=False)
 
     # ================================== CREATE MODEL ================================================================================================
