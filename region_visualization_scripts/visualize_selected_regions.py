@@ -76,13 +76,16 @@ def visualize_multiple_regions(region_ids, colors=None, background_color='lightg
     region_stats = []
     region_centers = []
     
-    # Assign color indices for each region
+    # Use the first color for all regions (single color mode)
+    highlight_color = colors[0] if colors else 'red'
+    
+    # Assign same color index (1) for all regions
     for i, region_id in enumerate(region_ids):
         target_mask = rm == region_id
         vertex_count = np.sum(target_mask)
         
-        # Assign color index (i+1 because 0 is reserved for background)
-        color_indices[target_mask] = i + 1
+        # Assign same color index (1) to all regions
+        color_indices[target_mask] = 1
         
         # Calculate statistics
         if vertex_count > 0:
@@ -95,7 +98,7 @@ def visualize_multiple_regions(region_ids, colors=None, background_color='lightg
                 'vertices': vertex_count,
                 'center': center,
                 'extent': extent,
-                'color': colors[i],
+                'color': highlight_color,
                 'percentage': 100 * vertex_count / len(rm)
             })
             region_centers.append(center)
@@ -106,8 +109,8 @@ def visualize_multiple_regions(region_ids, colors=None, background_color='lightg
     mesh["Region_Colors"] = color_indices
     mesh["Region_ID"] = rm
     
-    # Create custom colormap
-    cmap_colors = [background_color] + colors[:len(region_ids)]
+    # Create custom colormap (background + single highlight color)
+    cmap_colors = [background_color, highlight_color]
     
     # Create visualization
     print(f"\n🖥️  Creating visualization...")
@@ -201,16 +204,48 @@ def main():
     
     # Check if region ID(s) provided as command line argument
     if len(sys.argv) > 1:
-        region_input = sys.argv[1]
-        region_ids = parse_region_input(region_input)
-        
-        if region_ids is None:
-            print("❌ Error: Invalid region format")
-            print("Usage examples:")
-            print("  python visualize_one_region.py 42")
-            print("  python visualize_one_region.py 10,15,20")
-            print("  python visualize_one_region.py 10-15")
-            return
+        # Check if all arguments after the first are numbers (space-separated region IDs)
+        # or if it's comma/range format
+        if len(sys.argv) > 2:
+            # Try to parse all remaining arguments as region IDs
+            try:
+                # If all arguments are numeric, treat them as space-separated region IDs
+                region_ids = [int(arg) for arg in sys.argv[1:]]
+                colors = None
+            except ValueError:
+                # Some arguments are not numeric, so parse as region_input + colors
+                region_input = sys.argv[1]
+                region_ids = parse_region_input(region_input)
+                
+                if region_ids is None:
+                    print("❌ Error: Invalid region format")
+                    print("Usage examples:")
+                    print("  python visualize_selected_regions.py 42")
+                    print("  python visualize_selected_regions.py 42 43 44 45")
+                    print("  python visualize_selected_regions.py 10,15,20")
+                    print("  python visualize_selected_regions.py 10-15")
+                    return
+                
+                # Parse colors from remaining arguments
+                color_input = sys.argv[2]
+                if ',' in color_input:
+                    colors = [c.strip() for c in color_input.split(',')]
+                else:
+                    colors = [color_input]
+        else:
+            # Single argument - could be one region or comma/range format
+            region_input = sys.argv[1]
+            region_ids = parse_region_input(region_input)
+            colors = None
+            
+            if region_ids is None:
+                print("❌ Error: Invalid region format")
+                print("Usage examples:")
+                print("  python visualize_selected_regions.py 42")
+                print("  python visualize_selected_regions.py 42 43 44 45")
+                print("  python visualize_selected_regions.py 10,15,20")
+                print("  python visualize_selected_regions.py 10-15")
+                return
     else:
         # Interactive input
         print("🧠 Multiple Regions Visualizer")
@@ -231,19 +266,11 @@ def main():
         except KeyboardInterrupt:
             print("\n👋 Cancelled by user")
             return
-    
-    # Handle colors
-    colors = None
-    if len(sys.argv) > 2:
-        color_input = sys.argv[2]
-        # Parse colors (comma-separated)
-        if ',' in color_input:
-            colors = [c.strip() for c in color_input.split(',')]
-        else:
-            colors = [color_input]
+        
+        colors = None
     
     # Ask for colors interactively if not provided and multiple regions
-    elif len(region_ids) > 1 and len(sys.argv) <= 2:
+    if colors is None and len(region_ids) > 1 and len(sys.argv) <= 1:
         try:
             color_choice = input(f"\nUse default colors for {len(region_ids)} regions? (y/n): ").lower()
             if color_choice.startswith('n'):
@@ -285,29 +312,31 @@ if __name__ == "__main__":
 🧠 Multiple Regions Visualizer
 
 Usage:
-    python visualize_one_region.py <region_ids> [colors]
-    python visualize_one_region.py --list    # Show available regions
+    python visualize_selected_regions.py <region_ids> [colors]
+    python visualize_selected_regions.py --list    # Show available regions
     
 Region Input Formats:
-    Single region:     42
-    Multiple regions:  10,15,20,25
-    Range of regions:  10-15 (includes 10,11,12,13,14,15)
+    Single region:        42
+    Multiple (spaces):    42 43 44 45 46
+    Multiple (commas):    10,15,20,25
+    Range of regions:     10-15 (includes 10,11,12,13,14,15)
     
 Color Input Formats:
     Single color:      red
     Multiple colors:   red,blue,green,orange
     
 Examples:
-    python visualize_one_region.py 42                    # Single region in red
-    python visualize_one_region.py 42 blue               # Single region in blue
-    python visualize_one_region.py 10,15,20              # Multiple regions, default colors
-    python visualize_one_region.py 10,15,20 red,blue,green  # Multiple regions, custom colors
-    python visualize_one_region.py 10-15                 # Range of regions (10 to 15)
-    python visualize_one_region.py 10-15 orange          # Range in orange
-    python visualize_one_region.py --list                # Show all available region IDs
+    python visualize_selected_regions.py 42                    # Single region in red
+    python visualize_selected_regions.py 42 43 44 45          # Multiple regions (space-separated), default colors
+    python visualize_selected_regions.py 42 blue               # Single region in blue
+    python visualize_selected_regions.py 10,15,20              # Multiple regions (comma-separated), default colors
+    python visualize_selected_regions.py 10,15,20 red,blue,green  # Multiple regions, custom colors
+    python visualize_selected_regions.py 10-15                 # Range of regions (10 to 15)
+    python visualize_selected_regions.py 10-15 orange          # Range in orange
+    python visualize_selected_regions.py --list                # Show all available region IDs
     
 Interactive Mode:
-    python visualize_one_region.py                       # Prompts for input
+    python visualize_selected_regions.py                       # Prompts for input
         """)
         
     elif len(sys.argv) > 1 and sys.argv[1] in ['--list', '-l']:
