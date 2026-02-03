@@ -46,6 +46,7 @@ def load_mat_file(filepath, variable_name=None):
                         data[key] = np.array(f[key])
                     except:
                         print(f"  Warning: Could not load variable '{key}'")
+        print("data",data)
     
     # Display available variables
     print("\nAvailable variables in MAT file:")
@@ -61,6 +62,8 @@ def load_mat_file(filepath, variable_name=None):
             available = [k for k in data.keys() if not k.startswith(('#', '__'))]
             raise ValueError(f"Variable '{variable_name}' not found. Available: {available}")
         return data[variable_name]
+    
+    print("finally return data ----- ",data)
     
     return data
 
