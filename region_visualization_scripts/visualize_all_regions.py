@@ -58,11 +58,17 @@ def create_region_labels():
         if region_id in fs_labels:
             region_names[region_id] = fs_labels[region_id]
         else:
-            # Determine hemisphere and create generic label
-            if region_id < 500:  # Arbitrary split for demonstration
-                hemisphere = "Left"
+            # Determine hemisphere based on actual vertex positions
+            region_mask = rm == region_id
+            region_vertices = pos[region_mask]
+            
+            if len(region_vertices) > 0:
+                # Calculate mean X coordinate: negative = Left, positive = Right
+                mean_x = np.mean(region_vertices[:, 0])
+                hemisphere = "Left" if mean_x < 0 else "Right"
             else:
-                hemisphere = "Right"
+                hemisphere = "Unknown"
+            
             region_names[region_id] = f"{hemisphere} Region {region_id}"
     
     return region_names
